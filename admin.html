@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>로미 PT 관리</title>
+<link rel="manifest" href="manifest-admin.webmanifest">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#7c3aed">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="PT 관리">
+<script src="firebase-config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
+<script src="common.js"></script>
+<style>
+:root{
+  --bg:#f7f5fc; --card:#fff; --ink:#1e1b2e; --sub:#6e6880; --line:#e6e0f2;
+  --acc:#7c3aed; --acc-soft:#f0e9fe; --warn:#c2410c; --warn-soft:#fdecdf;
+  --bad:#b91c1c; --bad-soft:#fde8e8; --mute:#9a9aa0; --done:#475569; --done-soft:#eceff3;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#14121b; --card:#1e1b28; --ink:#f3f1f8; --sub:#a59fb8; --line:#2f2a3d;
+    --acc:#a78bfa; --acc-soft:#2c2245; --warn:#fb923c; --warn-soft:#3a2416;
+    --bad:#f87171; --bad-soft:#3a1a1a; --mute:#6b6b72; --done:#94a3b8; --done-soft:#262a31; }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;
+  -webkit-text-size-adjust:100%}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+header{padding:18px 18px 8px;max-width:640px;margin:0 auto}
+header h1{font-size:20px;margin:0;letter-spacing:-.3px}
+header p{margin:2px 0 0;color:var(--sub);font-size:13px}
+main{max-width:640px;margin:0 auto;padding:6px 14px 110px}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);
+  display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom);z-index:5}
+nav.tabs .in{display:flex;max-width:640px;width:100%}
+nav.tabs button{flex:1;border:0;background:none;padding:12px 0 14px;font-size:13px;color:var(--sub);font-weight:600}
+nav.tabs button.on{color:var(--acc)}
+nav.tabs button span{display:block;font-size:18px;margin-bottom:2px}
+.notice{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;text-align:center;color:var(--sub);margin-top:20px;line-height:1.6}
+.weekbar{display:flex;align-items:center;gap:8px;margin:4px 0 10px}
+.weekbar .lbl{flex:1;text-align:center;font-weight:700}
+.btn{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:8px 12px;font-weight:600;font-size:14px}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+@media (prefers-color-scheme: dark){ .btn.pri{color:#1a1030} .day.on,.day.on span,.day.on i,.rchips .on{color:#1a1030} }
+.btn.warn{color:var(--warn)} .btn.bad{color:var(--bad)}
+.btn.block{display:block;width:100%;padding:12px}
+.btn:disabled{opacity:.45}
+.days{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:12px}
+.day{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:7px 0 6px;text-align:center}
+.day span{display:block;font-size:11px;color:var(--sub)}
+.day b{display:block;font-size:17px;margin:1px 0}
+.day i{display:block;font-style:normal;font-size:11px;color:var(--acc);min-height:14px;font-weight:700}
+.day.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.day.on span,.day.on i{color:#fff}
+.day.today b{text-decoration:underline;text-underline-offset:3px}
+.day.off{opacity:.6}
+.day.off i{color:var(--warn)}
+.day.on.off{opacity:1}
+.offrow{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
+.offrow:last-child{border-bottom:0}
+.c-wait{background:#ede4ff;color:#6d28d9}
+@media (prefers-color-scheme: dark){ .c-wait{background:#3a2a5c;color:#d8c8ff} }
+.wrow{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px}
+.wrow .row{margin-top:8px}
+.alert{background:var(--acc-soft);border:1px solid var(--acc);border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:14px}
+.alert button{display:block;width:100%;text-align:left;border:0;background:none;padding:6px 0;color:var(--acc);font-weight:700}
+.toolbar{display:flex;gap:8px;margin-bottom:12px}
+.toolbar .btn{flex:1;font-size:13px;padding:9px 6px}
+.daynote{font-size:13px;color:var(--sub);margin:-4px 2px 10px}
+.slot{display:flex;gap:10px;align-items:stretch;margin-bottom:7px}
+.slot .t{width:50px;flex:none;font-size:13px;font-weight:700;color:var(--sub);padding-top:13px;text-align:right}
+.slot .empty{flex:1;border:1.5px dashed var(--line);background:transparent;border-radius:12px;padding:12px;text-align:left;color:var(--mute);font-size:14px}
+.slot .empty.past{opacity:.4}
+.bk{flex:1;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:10px 12px;text-align:left;border-left:5px solid var(--acc)}
+.bk .n{font-weight:700;font-size:15px}
+.bk .m{font-size:12px;color:var(--sub);margin-top:2px}
+.bk.s-done{border-left-color:var(--done);opacity:.8}
+.bk.s-noshow{border-left-color:var(--bad)}
+.bk.s-late{border-left-color:var(--warn)}
+.chip{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:99px;margin-left:6px;vertical-align:2px}
+.c-booked{background:var(--acc-soft);color:var(--acc)}
+.c-done{background:var(--done-soft);color:var(--done)}
+.c-noshow{background:var(--bad-soft);color:var(--bad)}
+.c-late{background:var(--warn-soft);color:var(--warn)}
+.c-canceled{background:var(--done-soft);color:var(--mute)}
+.c-low{background:var(--warn-soft);color:var(--warn)}
+.c-zero{background:var(--bad-soft);color:var(--bad)}
+.c-ok{background:var(--acc-soft);color:var(--acc)}
+.canceled{margin-top:14px;font-size:13px;color:var(--mute)}
+.canceled button{border:0;background:none;color:var(--mute);text-decoration:underline;padding:2px 0;font-size:13px}
+.sec{font-size:13px;font-weight:700;color:var(--sub);margin:18px 2px 8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:8px}
+.mrow{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:8px}
+.mrow .grow{flex:1;min-width:0}
+.mrow .n{font-weight:700}
+.mrow .m{font-size:12px;color:var(--sub);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.big{font-size:20px;font-weight:800;text-align:right;line-height:1}
+.big small{display:block;font-size:11px;font-weight:600;color:var(--sub);margin-top:3px}
+.rchips{display:flex;gap:6px;margin-bottom:12px}
+.rchips button{flex:1}
+.rchips .on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.msg{white-space:pre-wrap;font-size:13.5px;line-height:1.55;background:var(--bg);border-radius:10px;padding:10px 12px;margin:8px 0 10px}
+.row{display:flex;gap:8px}
+.row>*{flex:1}
+.sent{opacity:.55}
+label.f{display:block;font-size:13px;font-weight:700;color:var(--sub);margin:12px 0 5px}
+input.i,select.i,textarea.i{width:100%;border:1px solid var(--line);background:var(--card);border-radius:10px;padding:10px 11px;font-size:16px}
+textarea.i{min-height:90px;resize:vertical;line-height:1.5}
+.dows{display:flex;gap:5px}
+.dows label{flex:1;text-align:center;border:1px solid var(--line);border-radius:9px;padding:8px 0;font-size:14px;background:var(--card)}
+.dows input{display:none}
+.dows label.on{background:var(--warn-soft);color:var(--warn);border-color:var(--warn)}
+.hint{font-size:12px;color:var(--sub);margin-top:5px;line-height:1.5}
+.sheet{position:fixed;inset:0;z-index:20;display:none}
+.sheet.open{display:block}
+.sheet .bd{position:absolute;inset:0;background:rgba(0,0,0,.4)}
+.sheet .pn{position:absolute;left:0;right:0;bottom:0;max-height:88vh;overflow:auto;background:var(--card);
+  border-radius:18px 18px 0 0;padding:18px 18px calc(22px + env(safe-area-inset-bottom));max-width:640px;margin:0 auto}
+.sheet h3{margin:0 0 4px;font-size:18px}
+.sheet .sub{color:var(--sub);font-size:13px;margin-bottom:6px}
+.sheet h4{margin:18px 0 8px;font-size:14px;color:var(--sub)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.x{position:absolute;right:12px;top:10px;border:0;background:none;font-size:22px;color:var(--sub);padding:6px}
+.mlist{max-height:230px;overflow:auto;margin-top:8px;border:1px solid var(--line);border-radius:10px}
+.mlist button{display:flex;justify-content:space-between;width:100%;border:0;border-bottom:1px solid var(--line);background:none;padding:11px 12px;text-align:left}
+.mlist button:last-child{border-bottom:0}
+.mlist button.on{background:var(--acc-soft);color:var(--acc);font-weight:700}
+.link{border:0;background:none;color:var(--acc);font-weight:700;padding:8px 0;font-size:14px}
+#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:99px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:30;max-width:90vw;text-align:center}
+#toast.show{opacity:1}
+.banner{background:var(--warn-soft);color:var(--warn);font-size:13px;border-radius:10px;padding:8px 12px;margin-bottom:10px}
+.avg{width:100%;border-collapse:separate;border-spacing:3px;margin-top:6px;table-layout:fixed}
+.avg th{font-size:11.5px;color:var(--sub);font-weight:700;padding:2px 0;cursor:pointer;user-select:none}
+.avg tr th:first-child{width:52px;text-align:right;white-space:nowrap;padding-right:3px}
+.avc{display:block;width:100%;height:32px;border:1px solid var(--line);background:var(--card);border-radius:7px;padding:0}
+.avc.on{background:var(--acc);border-color:var(--acc)}
+</style>
+</head>
+<body>
+<header style="display:flex;align-items:flex-start;gap:8px">
+  <div style="flex:1"><h1 id="htitle">PT 스케줄</h1><p id="hsub"></p></div>
+  <button class="btn" id="pb" data-act="pushopen" title="알림 설정" style="display:none">🔕</button>
+  <button class="btn" id="rl" data-act="reload" title="새로고침">↻</button>
+</header>
+<main id="view"><div class="notice">불러오는 중…</div></main>
+<nav class="tabs"><div class="in">
+  <button data-act="tab" data-tab="schedule" class="on"><span>🗓</span>일정</button>
+  <button data-act="tab" data-tab="remind"><span>💬</span>리마인드</button>
+  <button data-act="tab" data-tab="members"><span>👥</span>회원</button>
+  <button data-act="tab" data-tab="settings"><span>⚙️</span>설정</button>
+</div></nav>
+<div class="sheet" id="sheet"><div class="bd" data-act="close"></div><div class="pn" id="pn"></div></div>
+<div id="toast"></div>
+
+<script>
+/* ---------- utils ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad = n => String(n).padStart(2,'0');
+const ds = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parseD = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
+const addDays = (s,n) => { const d = parseD(s); d.setDate(d.getDate()+n); return ds(d); };
+const DOW = ['일','월','화','수','목','금','토'];
+const dow = s => parseD(s).getDay();
+const mondayOf = s => { const w = dow(s); return addDays(s, w===0 ? -6 : 1-w); };
+const md = s => { const d = parseD(s); return `${d.getMonth()+1}/${d.getDate()}`; };
+const toMin = t => { const [h,m] = String(t).split(':').map(Number); return (h||0)*60 + (m||0); };
+const fromMin = m => `${pad(Math.floor(m/60))}:${pad(m%60)}`;
+const todayStr = () => ds(new Date());
+const nowMin = () => { const d = new Date(); return d.getHours()*60 + d.getMinutes(); };
+
+const AV_BANDS = [[6,9],[9,12],[12,15],[15,18],[18,21],[21,23]];
+const AV_DAYS = [1,2,3,4,5,6,0];
+const avKeys = a => (a && Array.isArray(a.slots)) ? a.slots : [];
+function availGrid(a){
+  const on = new Set(avKeys(a));
+  return `<table class="avg"><tr><th></th>${AV_DAYS.map(d=>`<th class="avh" data-avcol="${d}">${DOW[d]}</th>`).join('')}</tr>${AV_BANDS.map(([s,e])=>`<tr><th class="avh" data-avrow="${s}">${s}~${e}시</th>${AV_DAYS.map(d=>{ const k = d+'-'+s; return `<td><button type="button" class="avc ${on.has(k)?'on':''}" data-avk="${k}" aria-label="${DOW[d]}요일 ${s}~${e}시"></button></td>`; }).join('')}</tr>`).join('')}</table>
+  <div class="hint">가능한 칸을 모두 눌러 주세요. 요일이나 시간 글자를 누르면 그 줄 전체가 선택돼요.</div>`;
+}
+const readGrid = () => ({ slots:[...document.querySelectorAll('.avc.on')].map(x=>x.dataset.avk) });
+function availStr(a){
+  const ks = avKeys(a); if (!ks.length) return '';
+  return AV_DAYS.filter(d => ks.some(k => k.indexOf(d+'-') === 0)).map(d => {
+    const rs = [];
+    AV_BANDS.forEach(([s,e]) => { if (!ks.includes(d+'-'+s)) return; const last = rs[rs.length-1]; if (last && last[1] === s) last[1] = e; else rs.push([s,e]); });
+    return `${DOW[d]} ${rs.map(([s,e])=>`${s}~${e}시`).join(', ')}`;
+  }).join(' · ');
+}
+document.addEventListener('click', e => {
+  const c = e.target.closest('.avc'); if (c) { c.classList.toggle('on'); return; }
+  const h = e.target.closest('.avh'); if (!h) return;
+  const tb = h.closest('table');
+  const cells = [...tb.querySelectorAll('.avc')].filter(x => h.dataset.avcol != null ? x.dataset.avk.split('-')[0] === h.dataset.avcol : x.dataset.avk.split('-')[1] === h.dataset.avrow);
+  const allOn = cells.every(x => x.classList.contains('on'));
+  cells.forEach(x => x.classList.toggle('on', !allOn));
+});
+const DEFAULTS = {
+  trainerName:'로미', openTime:'06:00', closeTime:'23:00', unit:60, windowOn:true, openWeeks:1, openDow:1, openAt:'00:00', maxPerWeek:2, weekendOn:true, weekendOpen:'10:00', weekendClose:'18:00', splitOn:true, splitTime:'18:00', daySplit:{'3':'17:00'}, unit2:50, closedDays:[], lateDeduct:true, cutoffHours:4,
+  inviteTpl:'[{트레이너} 트레이너 PT 예약 안내]\n{이름} 회원님, 이제 PT 예약·변경을 아래 링크에서 직접 하실 수 있어요!\n\n{링크}\n\n① 링크 열기 → ② 전화번호 입력 → ③ 이름 확인하고 비밀번호 숫자 4자리 만들기\n📲 가입 후 화면 위 [📲 앱] 버튼을 누르면 홈 화면에 추가하는 방법이 나와요.\n※ {규정}',
+  policy:'일정 변경·취소는 수업 4시간 전까지 부탁드려요. 그 이후 취소와 노쇼는 1회 차감됩니다.',
+  remindTpl:'안녕하세요 {이름} 회원님! {트레이너} 트레이너입니다 :)\n{언제} {날짜}({요일}) {시간} PT 수업 예정이에요.\n변경이 필요하시면 미리 말씀 부탁드려요! (남은 횟수 {남은횟수}회)',
+  changeTpl:'{이름} 회원님, PT 일정이 {날짜}({요일}) {시간}으로 변경되었어요. 확인 부탁드려요!',
+  waitTpl:'{이름} 회원님! 대기하셨던 {날짜}({요일}) {시간} 자리가 났어요. 예약 원하시면 답장 주세요 :)',
+  waitOkTpl:'{이름} 회원님, {날짜}({요일}) {시간} PT 예약 확정됐어요! 그때 뵐게요 :)',
+  shareHead:'[{트레이너} 트레이너 PT 가능 시간]',
+  shareTail:'원하시는 시간을 답장 주시면 예약해 드릴게요!'
+};
+const ST = {
+  booked:{l:'예약'}, done:{l:'완료'}, noshow:{l:'노쇼'}, late:{l:'당일취소'}, canceled:{l:'취소'}
+};
+
+const S = {
+  db:null, members:{}, bookings:{}, settings:{...DEFAULTS},
+  tab:'schedule', weekStart: mondayOf(todayStr()), day: todayStr(), remDate: addDays(todayStr(),1),
+  off:{}, waits:{}, fixed:{}, vmap:{}, got:{m:false,b:false}, loaded:false, slow:false, err:null, sheet:null
+};
+
+const deducts = st => st==='done' || st==='noshow' || (st==='late' && !!S.settings.lateDeduct);
+const active = b => b.status !== 'canceled';
+const mname = id => S.members[id]?.name || '(삭제된 회원)';
+const isWeekend = d => d && (dow(d)===0 || dow(d)===6);
+function grid(d){
+  const s = S.settings, we = s.weekendOn && isWeekend(d);
+  const out = [], open = toMin(we ? s.weekendOpen : s.openTime), close = toMin(we ? s.weekendClose : s.closeTime);
+  const u1 = Math.max(10, Number(s.unit)||60), u2 = Math.max(10, Number(s.unit2)||50);
+  const st = (d && s.daySplit && s.daySplit[String(dow(d))]) || s.splitTime;
+  const split = s.splitOn ? Math.min(Math.max(toMin(st), open), close) : close;
+  for (let m = open; m + u1 <= split; m += u1) out.push(fromMin(m));
+  if (s.splitOn) for (let m = split; m + u2 <= close; m += u2) out.push(fromMin(m));
+  return out;
+}
+const offType = d => S.off[d] || ((S.settings.closedDays||[]).includes(dow(d)) ? '휴무 요일' : null);
+const waitsAt = (d,t) => Object.values(S.waits).filter(w => w.date===d && w.time===t && S.members[w.memberId]).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+function openWaitSlots(){
+  const t = todayStr(), seen = {}, out = [];
+  for (const w of Object.values(S.waits)){
+    const k = w.date+'_'+w.time;
+    if (seen[k] || !S.members[w.memberId] || w.date < t || (w.date===t && toMin(w.time) <= nowMin())) continue;
+    seen[k] = 1;
+    if (!offType(w.date) && !notOpen(w.date) && !conflict(w.date, w.time, null)) out.push({ date:w.date, time:w.time, n:waitsAt(w.date,w.time).length });
+  }
+  return out.sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+}
+const OPEN_OFF = od => (Number(od)===0 ? 6 : Number(od)-1);
+const openWeeks = () => Math.max(1, Number(S.settings.openWeeks)||1);
+function openMomentFor(d){ const s = S.settings; return addDays(addDays(mondayOf(d), -7*openWeeks()), OPEN_OFF(s.openDow ?? 0)); }
+function openLimit(){
+  const s = S.settings; if (!s.windowOn) return null;
+  const t = todayStr(), ws = mondayOf(t), od = addDays(ws, OPEN_OFF(s.openDow ?? 0));
+  const passed = t > od || (t === od && nowMin() >= toMin(s.openAt || '00:00'));
+  return addDays(ws, 6 + 7*(passed ? openWeeks() : openWeeks()-1));
+}
+const notOpen = d => { const L = openLimit(); return !!L && d > L; };
+const openLabel = d => { const o = openMomentFor(d); return `${md(o)}(${DOW[dow(o)]}) ${S.settings.openAt||'00:00'}`; };
+const weekCount = (mid, d, except) => { let n = 0; const ws = mondayOf(d); for (let i=0;i<7;i++) n += onDate(addDays(ws,i)).filter(b => b.memberId===mid && b.id!==except && active(b)).length; return n; };
+const overMax = (mid, d, except) => { const mx = Number(S.settings.maxPerWeek)||0; return mx > 0 && weekCount(mid, d, except) >= mx; };
+const maxMsg = (mid) => `${mname(mid)} 회원님은 그 주에 이미 ${Number(S.settings.maxPerWeek)}회 예약돼 있어요 (주 최대 ${Number(S.settings.maxPerWeek)}회)`;
+function fixedOn(d){
+  const out = [];
+  for (const f of Object.values(S.fixed)){
+    if (Number(f.dow)!==dow(d) || d < (f.startDate||'') || !S.members[f.memberId]) continue;
+    if (Object.values(S.bookings).some(b => b.fixedId===f.id && b.fixedDate===d)) continue;
+    const v = { id:`fx_${f.id}_${d}`, virtual:true, fixedId:f.id, fixedDate:d, memberId:f.memberId, date:d, time:f.time, status:'booked', deducted:false, reminded:false, note:'' };
+    S.vmap[v.id] = v; out.push(v);
+  }
+  return out;
+}
+const getB = id => S.bookings[id] || S.vmap[id];
+const onDate = d => Object.values(S.bookings).filter(b => b.date === d).concat(fixedOn(d));
+const conflict = (d,t,except) => onDate(d).some(x => x.id!==except && x.time===t && active(x));
+async function materialize(id){
+  const v = S.vmap[id]; if (!v) return id;
+  const data = { memberId:v.memberId, date:v.date, time:v.time, status:'booked', deducted:false, reminded:false, note:'', fixedId:v.fixedId, fixedDate:v.fixedDate, createdAt:Date.now() };
+  let ref; if (!await save(async()=>{ ref = await S.db.collection('bookings').add(data); })) return null;
+  S.bookings[ref.id] = { id:ref.id, ...data }; delete S.vmap[id];
+  return ref.id;
+}
+const upcoming = mid => Object.values(S.bookings).filter(b => b.memberId===mid && b.status==='booked' && b.date>=todayStr()).length;
+
+function fill(tpl, b){
+  const m = S.members[b.memberId] || {}, t = todayStr();
+  const when = b.date===t ? '오늘' : b.date===addDays(t,1) ? '내일' : '';
+  return String(tpl||'')
+    .split('{이름}').join(m.name||'')
+    .split('{트레이너}').join(S.settings.trainerName||'')
+    .split('{날짜}').join(md(b.date))
+    .split('{요일}').join(DOW[dow(b.date)])
+    .split('{시간}').join(b.time)
+    .split('{남은횟수}').join(m.remaining ?? '')
+    .split('{언제}').join(when)
+    .replace(/[ \t]{2,}/g,' ').replace(/^ +/gm,'');
+}
+const smsHref = (phone, body) => `sms:${String(phone||'').replace(/[^0-9+]/g,'')}?&body=${encodeURIComponent(body)}`;
+
+/* ---------- toast / copy / sheet ---------- */
+let tT;
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(tT); tT=setTimeout(()=>t.classList.remove('show'),2200); }
+async function copy(text){
+  try { await navigator.clipboard.writeText(text); toast('복사했어요. 카톡에 붙여넣기 하세요'); return; } catch(e){}
+  try {
+    const ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select(); const ok=document.execCommand('copy'); ta.remove();
+    if (ok) { toast('복사했어요. 카톡에 붙여넣기 하세요'); return; }
+  } catch(e){}
+  openSheet(`<button class="x" data-act="close">×</button><h3>문구 복사</h3><div class="sub">아래 글을 길게 눌러 전체 선택 후 복사해 주세요.</div>
+    <textarea class="i" style="min-height:200px" readonly>${esc(text)}</textarea>`);
+}
+function openSheet(html, ctx){ S.sheet = ctx || {}; $('#pn').innerHTML = html; $('#sheet').classList.add('open'); }
+function closeSheet(){ $('#sheet').classList.remove('open'); $('#pn').innerHTML=''; S.sheet=null; }
+
+async function save(fn){
+  if (!S.db) { toast('아직 연결되지 않았어요'); return false; }
+  try { await fn(); return true; }
+  catch(e){
+    const msg = errMsg(e);
+    if (msg === 'LOGIN') { doLogout('다시 로그인해 주세요.'); return false; }
+    toast(msg || '저장하지 못했어요. 잠시 후 다시 시도해 주세요');
+    return false;
+  }
+}
+
+/* ---------- views ---------- */
+function render(){
+  document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab===S.tab));
+  $('#htitle').textContent = `${S.settings.trainerName||''} PT 스케줄`.trim();
+  const t = todayStr(); $('#hsub').textContent = `오늘 ${md(t)}(${DOW[dow(t)]}) · 관리자`;
+  const v = $('#view');
+  document.querySelector('nav.tabs').style.display = S.login ? 'none' : '';
+  $('#rl').style.display = S.login ? 'none' : '';
+  if (S.login) $('#pb').style.display = 'none';
+  if (S.login) { v.innerHTML = vLogin(); return; }
+  if (S.err) { v.innerHTML = `<div class="notice">${esc(S.err)}</div>`; return; }
+  if (!S.loaded) { v.innerHTML = `<div class="notice">${S.slow ? '데이터에 아직 연결되지 않았어요.<br>인터넷 연결을 확인하고 잠시 기다려 주세요.' : '불러오는 중…'}</div>`; return; }
+  const banner = S.slow ? `<div class="banner">연결이 느려요. 화면이 최신이 아닐 수 있어요.</div>` : '';
+  v.innerHTML = banner + ({schedule:vSchedule, remind:vRemind, members:vMembers, settings:vSettings})[S.tab]();
+}
+function refresh(){ if (S.tab !== 'settings') render(); }
+
+function vSchedule(){
+  const t = todayStr(), ws = S.weekStart, we = addDays(ws,6);
+  const closed = S.settings.closedDays || [];
+  let h = `<div class="weekbar">
+    <button class="btn" data-act="week" data-d="-7">‹</button>
+    <div class="lbl">${md(ws)} – ${md(we)}</div>
+    <button class="btn" data-act="week" data-d="7">›</button>
+    <button class="btn" data-act="today">오늘</button></div><div class="days">`;
+  for (let i=0;i<7;i++){
+    const d = addDays(ws,i), n = onDate(d).filter(active).length, ot = offType(d);
+    h += `<button class="day ${d===S.day?'on':''} ${d===t?'today':''} ${ot||notOpen(d)?'off':''}" data-act="day" data-date="${d}">
+      <span>${DOW[dow(d)]}</span><b>${parseD(d).getDate()}</b><i>${ot ? (S.off[d] ? esc(S.off[d]) : '휴무') : notOpen(d) ? '오픈 전' : (n?n+'건':'')}</i></button>`;
+  }
+  h += `</div><div class="toolbar">
+    <button class="btn" data-act="share">📋 빈 시간 문구</button>
+    <button class="btn" data-act="newbk" data-time="">＋ 예약 추가</button>
+    <button class="btn" data-act="offs">🌙 휴무·월차</button></div>`;
+  const sw = Object.values(R.data.swaps||{}).filter(w => w.status==='pending' && S.bookings[w.fromBooking] && S.bookings[w.toBooking]);
+  if (sw.length) h += `<div class="alert">🔁 <b>회원 간 변경 요청 ${sw.length}건</b> · 상대 회원이 아직 답하지 않았어요${sw.map(w => { const a = S.bookings[w.fromBooking], b = S.bookings[w.toBooking];
+    return `<button data-act="swapnote" data-id="${w.id}">${esc(mname(w.fromMember))} ${md(a.date)} ${a.time} ↔ ${esc(mname(w.toMember))} ${md(b.date)} ${b.time} ›</button>`; }).join('')}</div>`;
+  const ow = openWaitSlots();
+  if (ow.length) h += `<div class="alert">🔔 <b>자리 난 대기 ${ow.length}건</b> · 대기 회원에게 연락해 보세요${ow.map(x=>`<button data-act="waitsheet" data-date="${x.date}" data-time="${x.time}">${md(x.date)}(${DOW[dow(x.date)]}) ${x.time} · 대기 ${x.n}명 ›</button>`).join('')}</div>`;
+  const d = S.day, list = onDate(d);
+  const dOff = offType(d) || (notOpen(d) ? '오픈 전' : null);
+  if (dOff === '오픈 전'){
+    h += `<div class="banner"><b>아직 예약이 열리지 않은 주예요</b> · ${openLabel(d)}에 열려요.</div>`;
+  } else if (dOff){
+    const left = list.filter(b=>b.status==='booked').length;
+    h += `<div class="banner"><b>${esc(dOff)}</b> · 이 날은 예약을 받지 않아요.${S.off[d]?` <button class="link" style="padding:0;margin-left:4px" data-act="unoff" data-date="${d}">해제</button>`:''}${left?`<br>잡혀 있는 수업 ${left}건이 있어요. 옮기거나 취소해 주세요.`:''}</div>`;
+  } else {
+    h += `<button class="link" style="margin:-6px 0 6px" data-act="quickoff" data-date="${d}">${md(d)}(${DOW[dow(d)]}) 쉬는 날로 지정 ›</button>`;
+  }
+  const times = [...new Set([...grid(d), ...list.filter(active).map(b=>b.time)])].sort((a,b)=>toMin(a)-toMin(b));
+  const past = tm => d < t || (d===t && toMin(tm) <= nowMin());
+  for (const tm of times){
+    const b = list.find(x => x.time===tm && active(x));
+    if (dOff && !b) continue;
+    h += `<div class="slot"><div class="t">${tm}</div>`;
+    if (b){
+      const m = S.members[b.memberId];
+      const rem = m ? `남은 ${m.remaining??0}회` : '';
+      h += `<button class="bk s-${b.status}" data-act="booking" data-id="${b.id}">
+        <div class="n">${esc(mname(b.memberId))}<span class="chip c-${b.status}">${ST[b.status]?.l||''}</span>${b.reminded&&b.status==='booked'?'<span class="chip c-done">알림✓</span>':''}${waitsAt(d,tm).length?`<span class="chip c-wait">대기 ${waitsAt(d,tm).length}</span>`:''}</div>
+        <div class="m">${rem}${b.note?' · '+esc(b.note):''}</div></button>`;
+    } else {
+      const wn = waitsAt(d,tm).length;
+      h += wn && !past(tm) ? `<button class="empty" style="border-color:var(--acc);color:var(--acc);font-weight:700" data-act="waitsheet" data-date="${d}" data-time="${tm}">🔔 자리 남 · 대기 ${wn}명</button>`
+        : `<button class="empty ${past(tm)?'past':''}" data-act="newbk" data-time="${tm}">＋ 비어 있음</button>`;
+    }
+    h += `</div>`;
+  }
+  const cx = list.filter(b=>!active(b));
+  if (cx.length) h += `<div class="canceled">취소된 수업: ${cx.map(b=>`<button data-act="booking" data-id="${b.id}">${b.time} ${esc(mname(b.memberId))}</button>`).join(', ')}</div>`;
+  return h;
+}
+
+function vRemind(){
+  const t = todayStr(), opts = [[t,'오늘'],[addDays(t,1),'내일'],[addDays(t,2),'모레']];
+  let h = `<div class="rchips">${opts.map(([d,l])=>`<button class="btn ${S.remDate===d?'on':''}" data-act="remdate" data-date="${d}">${l} ${md(d)}</button>`).join('')}</div>`;
+  const list = onDate(S.remDate).filter(b=>b.status==='booked').sort((a,b)=>toMin(a.time)-toMin(b.time));
+  if (!list.length) return h + `<div class="notice">${md(S.remDate)}(${DOW[dow(S.remDate)]})에 예약된 수업이 없어요.</div>`;
+  const left = list.filter(b=>!b.reminded).length;
+  h += `<div class="sec">${list.length}건 중 ${left}건 미발송</div>`;
+  for (const b of list){
+    const m = S.members[b.memberId] || {}, msg = fill(S.settings.remindTpl, b);
+    h += `<div class="card ${b.reminded?'sent':''}">
+      <div style="display:flex;justify-content:space-between;align-items:center"><b>${b.time} · ${esc(mname(b.memberId))}</b>
+      <span class="hint" style="margin:0">${esc(m.phone||'연락처 없음')}</span></div>
+      <div class="msg">${esc(msg)}</div>
+      <div class="row">
+        <button class="btn" data-act="copyrem" data-id="${b.id}">문구 복사</button>
+        ${m.phone?`<a class="btn" target="_top" style="text-align:center;text-decoration:none" href="${esc(smsHref(m.phone,msg))}">문자앱 열기</a>`:''}
+        <button class="btn ${b.reminded?'':'pri'}" data-act="sent" data-id="${b.id}">${b.reminded?'보냄 취소':'보냄 ✓'}</button>
+      </div></div>`;
+  }
+  return h;
+}
+
+function vMembers(){
+  const ms = Object.values(S.members).sort((a,b)=>String(a.name).localeCompare(String(b.name),'ko'));
+  let h = `<button class="btn pri block" data-act="member" data-id="">＋ 회원 추가</button>`;
+  if (!ms.length) return h + `<div class="notice">아직 등록된 회원이 없어요.<br>회원을 추가하면 예약할 때 바로 고를 수 있어요.</div>`;
+  const low = ms.filter(m => (Number(m.remaining)||0) <= 2);
+  const row = m => {
+    const r = Number(m.remaining)||0, u = upcoming(m.id);
+    return `<button class="mrow" data-act="member" data-id="${m.id}"><div class="grow">
+      <div class="n">${esc(m.name)} ${m.hasPin?'<span class="chip c-ok">가입</span>':'<span class="chip c-canceled">미가입</span>'}${m.hasPush?'<span class="chip c-wait">🔔</span>':''}</div><div class="m">${esc(m.phone||'연락처 없음')} · 예정 ${u}회${m.memo?' · '+esc(m.memo):''}</div>${availStr(m.avail)?`<div class="m">🕒 ${esc(availStr(m.avail))}</div>`:''}</div>
+      <div class="big" style="color:${r===0?'var(--bad)':r<=2?'var(--warn)':'var(--ink)'}">${r}<small>남은 횟수</small></div></button>`;
+  };
+  if (low.length) h += `<div class="sec">재등록 상담 필요 (남은 2회 이하)</div>` + low.map(row).join('');
+  h += `<div class="sec">전체 회원 ${ms.length}명</div>` + ms.map(row).join('');
+  return h;
+}
+
+function vSettings(){
+  const s = S.settings, cd = s.closedDays||[];
+  return `<div class="card">
+    <label class="f">트레이너 이름 (문구에 들어가요)</label><input class="i" id="s_name" value="${esc(s.trainerName)}">
+    <div class="row"><div><label class="f">평일 첫 수업</label><input class="i" type="time" id="s_open" value="${esc(s.openTime)}"></div>
+    <div><label class="f">평일 마감</label><input class="i" type="time" id="s_close" value="${esc(s.closeTime)}"></div></div>
+    <label class="f" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="s_we" ${s.weekendOn?'checked':''} style="width:18px;height:18px"> 주말(토·일)은 따로 운영</label>
+    <div class="row"><div><label class="f">주말 첫 수업</label><input class="i" type="time" id="s_weo" value="${esc(s.weekendOpen)}"></div>
+    <div><label class="f">주말 마감</label><input class="i" type="time" id="s_wec" value="${esc(s.weekendClose)}"></div></div>
+    <div class="hint">마감은 마지막 수업이 끝나는 시각이에요. 18:00이면 17:00 수업이 마지막이에요.</div>
+    <label class="f">수업 단위</label><select class="i" id="s_unit">${[30,40,50,60,90].map(u=>`<option value="${u}" ${Number(s.unit)===u?'selected':''}>${u}분</option>`).join('')}</select>
+    <label class="f" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="s_split" ${s.splitOn?'checked':''} style="width:18px;height:18px"> 특정 시간부터 수업 단위 바꾸기</label>
+    <div class="row"><div><label class="f">이 시간부터</label><input class="i" type="time" id="s_splitt" value="${esc(s.splitTime)}"></div>
+    <div><label class="f">바뀐 단위</label><select class="i" id="s_unit2">${[30,40,50,60,90].map(u=>`<option value="${u}" ${Number(s.unit2)===u?'selected':''}>${u}분</option>`).join('')}</select></div></div>
+    <div class="hint">예: 18:00부터 50분 → 18:00 · 18:50 · 19:40 · 20:30 · 21:20 · 22:10</div>
+    <label class="f">요일별로 바뀌는 시각 (비워두면 위 시각)</label>
+    <div class="dows">${[1,2,3,4,5].map(i=>`<div style="flex:1;text-align:center;font-size:12px">${DOW[i]}<input class="i" style="padding:6px 2px;font-size:12px;margin-top:3px" id="s_ds${i}" placeholder="-" value="${esc((s.daySplit||{})[String(i)]||'')}"></div>`).join('')}</div>
+    <div class="hint">예: 수요일 칸에 17:00 → 수요일만 17:00부터 50분 단위</div>
+    <label class="f" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="s_win" ${s.windowOn?'checked':''} style="width:18px;height:18px"> 예약을 일주일씩 열기</label>
+    <label class="f">몇 주 전에 열까요</label><select class="i" id="s_ow">${[1,2,3].map(n=>`<option value="${n}" ${openWeeks()===n?'selected':''}>${n}주 전</option>`).join('')}</select>
+    <div class="row"><div><label class="f">열리는 요일</label><select class="i" id="s_odow">${[1,2,3,4,5,6,0].map(i=>`<option value="${i}" ${Number(s.openDow??0)===i?'selected':''}>${DOW[i]}요일</option>`).join('')}</select></div>
+    <div><label class="f">열리는 시각</label><input class="i" type="time" id="s_oat" value="${esc(s.openAt||'00:00')}"></div></div>
+    <div class="hint">지금 예약 가능: ${openLimit() ? `${md(todayStr())} ~ ${md(openLimit())}` : '제한 없음'}</div>
+    <label class="f">한 회원 주당 최대 예약 (0 = 제한 없음)</label><input class="i" id="s_max" inputmode="numeric" value="${esc(s.maxPerWeek ?? 2)}">
+    <div class="hint">월~일 기준이에요. 취소된 수업은 세지 않고, 완료·노쇼·당일취소는 세요.</div>
+    <label class="f">회원이 직접 변경·취소할 수 있는 마감 (수업 몇 시간 전까지)</label><input class="i" id="s_cut" inputmode="numeric" value="${esc(s.cutoffHours ?? 4)}">
+    <label class="f">매주 쉬는 요일 (예약이 막혀요)</label><div class="dows">${[1,2,3,4,5,6,0].map(i=>`<label class="${cd.includes(i)?'on':''}"><input type="checkbox" data-dow="${i}" ${cd.includes(i)?'checked':''}>${DOW[i]}</label>`).join('')}</div>
+    <label class="f" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="s_late" ${s.lateDeduct?'checked':''} style="width:18px;height:18px"> 당일 취소도 1회 차감</label>
+  </div>
+  <div class="card">
+    <label class="f">변경 규정 (빈 시간 문구 끝에 붙어요)</label><textarea class="i" id="s_policy">${esc(s.policy)}</textarea>
+    <label class="f">리마인드 문구</label><textarea class="i" id="s_rem" style="min-height:120px">${esc(s.remindTpl)}</textarea>
+    <label class="f">일정 변경 안내 문구</label><textarea class="i" id="s_chg">${esc(s.changeTpl)}</textarea>
+    <label class="f">대기 · 자리 났을 때 문구</label><textarea class="i" id="s_wait">${esc(s.waitTpl)}</textarea>
+    <label class="f">대기 · 예약 확정 문구</label><textarea class="i" id="s_waitok">${esc(s.waitOkTpl)}</textarea>
+    <label class="f">회원 가입 안내 문자</label><textarea class="i" id="s_inv" style="min-height:140px">${esc(s.inviteTpl)}</textarea>
+    <div class="hint">{링크} 자리에 회원 예약 링크가 들어가요. {규정}은 위 변경 규정이에요.</div>
+    <label class="f">빈 시간 문구 첫 줄 / 마지막 줄</label><input class="i" id="s_head" value="${esc(s.shareHead)}"><input class="i" id="s_tail" style="margin-top:6px" value="${esc(s.shareTail)}">
+    <div class="hint">쓸 수 있는 칸: {이름} {트레이너} {날짜} {요일} {시간} {언제}(오늘/내일) {남은횟수}</div>
+  </div>
+  <button class="btn pri block" data-act="savesettings">설정 저장</button>
+  <div class="card" style="margin-top:14px">
+    <label class="f" style="margin-top:0">회원용 예약 링크 (가입한 회원이 로그인할 때)</label><div class="msg">${esc(R.url||'')}</div>
+    <button class="btn" data-act="copyurl" data-u="m">복사</button>
+    <label class="f">관리자 링크 (회원에게 보내지 마세요)</label><div class="msg">${esc(adminLink())}</div>
+    <button class="btn" data-act="copyurl" data-u="a">복사</button>
+    <label class="f">관리자 비밀번호 바꾸기</label>
+    <div class="row"><input class="i" type="password" id="s_newpw" placeholder="새 비밀번호"><button class="btn" style="flex:none" data-act="changepw">변경</button></div>
+    <button class="btn bad block" style="margin-top:14px" data-act="logout">로그아웃</button>
+  </div>`;
+}
+
+/* ---------- sheets ---------- */
+function bookingSheet(id){
+  const b = S.bookings[id]; if (!b) return;
+  const m = S.members[b.memberId] || {};
+  const stBtns = [['done','✅ 수업 완료'],['noshow','🚫 노쇼'],['late','⚠️ 당일 취소'],['canceled','↩︎ 취소 (차감 없음)']]
+    .filter(([s])=>s!==b.status)
+    .map(([s,l])=>`<button class="btn ${s==='noshow'?'bad':s==='late'?'warn':''}" data-act="status" data-st="${s}">${l}</button>`).join('');
+  const msg = fill(S.settings.remindTpl, b);
+  openSheet(`<button class="x" data-act="close">×</button>
+    <h3>${esc(mname(b.memberId))} <span class="chip c-${b.status}">${ST[b.status]?.l}</span></h3>
+    <div class="sub">${md(b.date)}(${DOW[dow(b.date)]}) ${b.time} · 남은 ${m.remaining??'-'}회 · ${esc(m.phone||'연락처 없음')}</div>
+    <div class="hint">완료·노쇼${S.settings.lateDeduct?'·당일취소':''}는 남은 횟수에서 1회 빠지고, 되돌리면 다시 채워져요.</div>
+    <h4>수업 처리</h4><div class="grid2">${stBtns}${b.status!=='booked'?`<button class="btn" data-act="status" data-st="booked">예약 상태로 되돌리기</button>`:''}</div>
+    ${active(b)?`<h4>예약 대기 (${waitsAt(b.date,b.time).length}명)</h4><button class="btn block" data-act="waitsheet" data-date="${b.date}" data-time="${b.time}">대기 보기 · 추가</button>`:''}
+    ${b.fixedId && S.fixed[b.fixedId] ? `<h4>고정 수업</h4><div class="hint">매주 ${DOW[Number(S.fixed[b.fixedId].dow)]}요일 ${esc(S.fixed[b.fixedId].time)} 고정이에요. 이번 주만 빼려면 위에서 '취소'를 누르세요.</div><button class="btn block" style="margin-top:8px" data-act="unfix" data-fid="${b.fixedId}">고정 해제 (다음 주부터 안 잡힘)</button>` : ''}
+    <h4>시간 변경</h4>
+    <div class="row"><input class="i" type="date" id="mv_d" value="${b.date}"><input class="i" type="time" id="mv_t" value="${b.time}" step="300"></div>
+    <button class="btn block" style="margin-top:8px" data-act="move">이 시간으로 옮기기</button>
+    <h4>메모</h4><input class="i" id="bk_note" value="${esc(b.note||'')}" placeholder="예: 무릎 컨디션 체크">
+    <button class="btn block" style="margin-top:8px" data-act="note">메모 저장</button>
+    <h4>회원에게 보낼 문구</h4>
+    <div class="row"><button class="btn" data-act="copytext" data-k="rem">리마인드 복사</button><button class="btn" data-act="copytext" data-k="chg">변경 안내 복사</button></div>
+    ${m.phone?`<a class="link" target="_top" href="${esc(smsHref(m.phone,msg))}">문자앱에서 리마인드 열기 ›</a>`:''}
+    <h4></h4><button class="btn bad block" data-act="delbk">${S.sheet?.confirmDel?'정말 기록에서 지울까요? (한 번 더 누르기)':'기록에서 완전히 삭제'}</button>`,
+    { kind:'booking', id, confirmDel: !!(S.sheet && S.sheet.confirmDel && S.sheet.id===id) });
+}
+
+function newBookingSheet(time){
+  const d = S.day, t = time || grid(d).find(tm => !conflict(d,tm,null)) || S.settings.openTime;
+  const hasM = Object.keys(S.members).length > 0;
+  openSheet(`<button class="x" data-act="close">×</button>
+    <h3>새 예약</h3>
+    <div class="row" style="margin-top:8px"><input class="i" type="date" id="nb_d" value="${d}"><input class="i" type="time" id="nb_t" value="${t}" step="300"></div>
+    <div id="nb_pick" ${hasM?'':'hidden'}>
+      <label class="f">회원 선택</label>
+      <input class="i" id="mq" placeholder="이름 검색" autocomplete="off">
+      <div class="mlist" id="mlist"></div>
+      <button class="link" data-act="newmtoggle">＋ 새 회원으로 예약</button>
+    </div>
+    <div id="nb_new" ${hasM?'hidden':''}>
+      <label class="f">새 회원 이름</label><input class="i" id="nm_name">
+      <div class="row"><div><label class="f">연락처</label><input class="i" id="nm_phone" inputmode="tel" placeholder="010-"></div>
+      <div><label class="f">남은 횟수</label><input class="i" id="nm_rem" inputmode="numeric" value="10"></div></div>
+      ${hasM?'<button class="link" data-act="newmtoggle">기존 회원에서 고르기</button>':''}
+    </div>
+    <label class="f">메모 (선택)</label><input class="i" id="nb_note">
+    <button class="btn pri block" style="margin-top:16px" data-act="createbk">예약하기</button>`,
+    { kind:'new', pick:null, newMode:!hasM });
+  drawMList('');
+}
+function drawMList(q){
+  const el = $('#mlist'); if (!el) return;
+  const ms = Object.values(S.members).filter(m => !q || String(m.name).includes(q) || String(m.phone||'').includes(q))
+    .sort((a,b)=>String(a.name).localeCompare(String(b.name),'ko'));
+  el.innerHTML = ms.length ? ms.map(m=>`<button data-act="pickm" data-id="${m.id}" class="${S.sheet?.pick===m.id?'on':''}"><span>${esc(m.name)}</span><span class="hint" style="margin:0">${Number(S.settings.maxPerWeek)>0?`이번 주 ${weekCount(m.id, $('#nb_d')?.value || S.day, null)}/${Number(S.settings.maxPerWeek)} · `:''}남은 ${m.remaining??0}회</span></button>`).join('')
+    : `<div class="hint" style="padding:12px">검색 결과가 없어요</div>`;
+}
+
+function memberSheet(id){
+  const m = id ? S.members[id] : null;
+  const hist = id ? Object.values(S.bookings).filter(b=>b.memberId===id).sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time)).slice(0,8) : [];
+  openSheet(`<button class="x" data-act="close">×</button>
+    <h3>${m?esc(m.name):'회원 추가'}</h3>
+    <label class="f">이름</label><input class="i" id="m_name" value="${esc(m?.name||'')}">
+    <label class="f">연락처</label><input class="i" id="m_phone" inputmode="tel" value="${esc(m?.phone||'')}" placeholder="010-">
+    <label class="f">수업 가능한 시간</label>
+    ${availGrid(m?.avail)}
+    <label class="f">남은 횟수</label><input class="i" id="m_rem" inputmode="numeric" value="${esc(m?.remaining ?? 10)}">
+    ${m?`<div class="row" style="margin-top:8px"><button class="btn" data-act="addrem" data-n="10">+10 재등록</button><button class="btn" data-act="addrem" data-n="20">+20</button><button class="btn" data-act="addrem" data-n="30">+30</button></div>`:''}
+    <label class="f">메모</label><input class="i" id="m_memo" value="${esc(m?.memo||'')}" placeholder="목표, 주의할 점 등">
+    ${m?`<h4>회원 예약 페이지</h4>${m.hasPin
+      ? `<div class="hint">가입 완료 · 회원님이 직접 예약·변경할 수 있어요.</div><button class="btn block" style="margin-top:8px" data-act="resetpin">${S.sheet?.confirmReset?'정말 초기화할까요? (한 번 더 누르기)':'비밀번호 초기화 (새 가입 링크 발급)'}</button>`
+      : `<div class="hint">아직 가입 전이에요. 아래 문자를 보내 주세요.${m.phone?'':' <b>연락처를 먼저 저장해야 가입할 수 있어요.</b>'}</div>
+        <div class="msg">${esc(inviteText(m))}</div>
+        <div class="row"><button class="btn" data-act="copyinvite">문구 복사</button>${m.phone?`<a class="btn pri" target="_top" style="text-align:center;text-decoration:none" href="${esc(smsHref(m.phone, inviteText(m)))}">문자 보내기</a>`:''}</div>`}`:''}
+    <button class="btn pri block" style="margin-top:16px" data-act="savemember">저장</button>
+    ${m?`<h4>고정 수업</h4>${Object.values(S.fixed).filter(f=>f.memberId===id).map(f=>`<div class="offrow"><span>매주 ${DOW[Number(f.dow)]}요일 ${esc(f.time)}</span><button class="btn" data-act="unfix" data-fid="${f.id}">해제</button></div>`).join('') || '<div class="hint">없어요.</div>'}
+    <div class="row" style="margin-top:8px"><select class="i" id="fx_dow">${[1,2,3,4,5,6,0].map(i=>`<option value="${i}">${DOW[i]}요일</option>`).join('')}</select><input class="i" type="time" id="fx_t" step="300"><button class="btn pri" style="flex:none" data-act="addfix">추가</button></div>
+    <div class="hint">고정 수업은 예약 오픈 전 주에도 미리 잡혀 있고, 주 최대 횟수에 포함돼요.</div>`:''}
+    ${hist.length?`<h4>최근 수업</h4>${hist.map(b=>`<div class="hint">${md(b.date)}(${DOW[dow(b.date)]}) ${b.time} <span class="chip c-${b.status}">${ST[b.status]?.l}</span></div>`).join('')}`:''}
+    ${m?`<h4></h4><button class="btn bad block" data-act="delmember">${S.sheet?.confirmDel?'정말 삭제할까요? (한 번 더 누르기)':'회원 삭제'}</button>`:''}`,
+    { kind:'member', id, confirmDel: S.sheet?.confirmDel && S.sheet?.id===id, confirmReset: S.sheet?.confirmReset && S.sheet?.id===id });
+}
+
+function waitSheet(d, t){
+  const ws = waitsAt(d,t), cur = onDate(d).find(x => x.time===t && active(x));
+  const isPast = d < todayStr() || (d===todayStr() && toMin(t) <= nowMin()), free = !cur && !offType(d) && !notOpen(d) && !isPast;
+  const taken = new Set([...ws.map(w=>w.memberId), cur?.memberId]);
+  const opts = Object.values(S.members).filter(m=>!taken.has(m.id)).sort((a,b)=>String(a.name).localeCompare(String(b.name),'ko'));
+  openSheet(`<button class="x" data-act="close">×</button>
+    <h3>${md(d)}(${DOW[dow(d)]}) ${t} 예약 대기</h3>
+    <div class="sub">${cur ? `현재 예약: ${esc(mname(cur.memberId))}. 이 수업이 취소되면 알려 드려요.` : free ? '지금 비어 있어요. 대기 순서대로 연락해 보세요.' : offType(d) ? `${esc(offType(d))}라 예약할 수 없는 날이에요.` : '이미 지난 시간이에요.'}</div>
+    ${ws.length ? ws.map((w,i)=>`<div class="wrow"><b>${i+1}. ${esc(mname(w.memberId))}</b> <span class="hint">남은 ${S.members[w.memberId]?.remaining??0}회 · ${esc(S.members[w.memberId]?.phone||'연락처 없음')}</span>
+      <div class="row">${free?`<button class="btn" data-act="copywait" data-id="${w.id}">자리 알림 복사</button><button class="btn pri" data-act="confirmwait" data-id="${w.id}">예약 확정</button>`:''}
+      <button class="btn bad" data-act="delwait" data-id="${w.id}">대기 취소</button></div></div>`).join('') : '<div class="hint" style="margin:8px 0">아직 대기 중인 회원이 없어요.</div>'}
+    ${isPast ? '' : `<label class="f">대기 추가</label>
+    <div class="row"><select class="i" id="w_m"><option value="">회원 선택</option>${opts.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select>
+    <button class="btn pri" style="flex:none" data-act="addwait">추가</button></div>`}
+    ${free?`<button class="link" data-act="newbk" data-time="${t}">대기 없이 다른 회원으로 예약 ›</button>`:''}`,
+    { kind:'wait', date:d, time:t });
+}
+async function setOff(dates, type){
+  const days = { ...S.off }, cut = addDays(todayStr(), -60);
+  for (const d of dates) { if (type) days[d] = type; else delete days[d]; }
+  for (const d of Object.keys(days)) if (d < cut) delete days[d];
+  const ok = await save(()=>S.db.doc('app/offdays').set({ days }));
+  if (ok) S.off = days;
+  return ok;
+}
+function offSheet(date){
+  const t = todayStr();
+  const up = Object.entries(S.off).filter(([d])=>d>=t).sort(([a],[b])=>a.localeCompare(b));
+  openSheet(`<button class="x" data-act="close">×</button>
+    <h3>휴무·월차 지정</h3>
+    <div class="sub">지정한 날은 예약 추가, 시간 변경, 빈 시간 문구에서 빠져요.</div>
+    <label class="f">종류</label>
+    <select class="i" id="of_type"><option>월차</option><option>휴무</option></select>
+    <div class="row"><div><label class="f">시작일</label><input class="i" type="date" id="of_from" value="${date}"></div>
+    <div><label class="f">끝나는 날 (하루면 비워두기)</label><input class="i" type="date" id="of_to"></div></div>
+    <div id="of_warn"></div>
+    <button class="btn pri block" style="margin-top:14px" data-act="addoff">지정하기</button>
+    <h4>예정된 휴무·월차</h4>
+    ${up.length ? up.map(([d,ty])=>`<div class="offrow"><span>${md(d)}(${DOW[dow(d)]}) <span class="chip c-late">${esc(ty)}</span></span><button class="btn" data-act="unoff" data-date="${d}">해제</button></div>`).join('')
+      : '<div class="hint">아직 없어요.</div>'}
+    ${(S.settings.closedDays||[]).length?`<div class="hint" style="margin-top:10px">매주 쉬는 요일(${(S.settings.closedDays).map(i=>DOW[i]).join('·')})은 설정 탭에서 바꿀 수 있어요.</div>`:''}`,
+    { kind:'off', date });
+}
+function shareText(){
+  const t = todayStr(), closed = S.settings.closedDays||[], lines = [];
+  for (let i=0;i<7;i++){
+    const d = addDays(S.weekStart,i);
+    if (d < t || offType(d) || notOpen(d)) continue;
+    const times = grid(d).filter(tm => !conflict(d,tm,null) && !(d===t && toMin(tm) <= nowMin()));
+    if (times.length) lines.push(`${md(d)}(${DOW[dow(d)]}) ${times.join(' · ')}`);
+  }
+  const head = String(S.settings.shareHead||'').split('{트레이너}').join(S.settings.trainerName||'');
+  if (!lines.length) return null;
+  return [head, '', ...lines, '', S.settings.shareTail, S.settings.policy ? `※ ${S.settings.policy}` : ''].filter((x,i,a)=>!(x===''&&a[i-1]==='')).join('\n').trim();
+}
+
+/* ---------- actions ---------- */
+const A = {
+  tab(el){ S.tab = el.dataset.tab; render(); window.scrollTo(0,0); },
+  week(el){ S.weekStart = addDays(S.weekStart, Number(el.dataset.d)); S.day = addDays(S.day, Number(el.dataset.d)); render(); },
+  today(){ S.day = todayStr(); S.weekStart = mondayOf(S.day); render(); },
+  day(el){ S.day = el.dataset.date; render(); },
+  close(){ closeSheet(); },
+  share(){
+    const txt = shareText();
+    if (!txt) { toast(notOpen(S.weekStart) ? `이 주는 ${openLabel(S.weekStart)}에 열려요` : '이 주에 보낼 수 있는 빈 시간이 없어요'); return; }
+    openSheet(`<button class="x" data-act="close">×</button><h3>빈 시간 안내 문구</h3>
+      <div class="sub">${md(S.weekStart)} – ${md(addDays(S.weekStart,6))} 중 오늘 이후 빈 시간이에요.</div>
+      <div class="msg">${esc(txt)}</div><button class="btn pri block" data-act="copyshare">복사하기</button>`, { kind:'share', txt });
+  },
+  copyshare(){ copy(S.sheet.txt); },
+  async booking(el){ const id = await materialize(el.dataset.id); if (id) bookingSheet(id); },
+  newbk(el){ newBookingSheet(el.dataset.time); },
+  pickm(el){ S.sheet.pick = el.dataset.id; drawMList($('#mq')?.value.trim()||''); },
+  newmtoggle(){ S.sheet.newMode = !S.sheet.newMode; $('#nb_pick').hidden = S.sheet.newMode; $('#nb_new').hidden = !S.sheet.newMode; },
+  async createbk(el){
+    const d = $('#nb_d').value, t = $('#nb_t').value, note = $('#nb_note').value.trim();
+    if (!d || !t) return toast('날짜와 시간을 넣어 주세요');
+    if (offType(d)) return toast(`그 날은 ${offType(d)}라 예약할 수 없어요`);
+    if (notOpen(d)) return toast(`그 주는 아직 안 열렸어요 · ${openLabel(d)}에 열려요`);
+    if (conflict(d,t,null)) return toast('이미 예약이 있는 시간이에요');
+    let mid = S.sheet.pick;
+    if (!S.sheet.newMode && !mid) return toast('회원을 골라 주세요');
+    if (!S.sheet.newMode && overMax(mid, d, null)) return toast(maxMsg(mid));
+    el.disabled = true;
+    if (S.sheet.newMode){
+      const name = $('#nm_name').value.trim(); if (!name){ el.disabled=false; return toast('회원 이름을 넣어 주세요'); }
+      let ref; const ok = await save(async()=>{ ref = await S.db.collection('members').add({ name, phone:$('#nm_phone').value.trim(), remaining:Number($('#nm_rem').value)||0, memo:'', createdAt:Date.now() }); });
+      if (!ok){ el.disabled=false; return; } mid = ref.id;
+    }
+    if (!mid){ el.disabled=false; return toast('회원을 골라 주세요'); }
+    const ok = await save(()=>S.db.collection('bookings').add({ memberId:mid, date:d, time:t, status:'booked', deducted:false, reminded:false, note, createdAt:Date.now() }));
+    if (!ok){ el.disabled=false; return; }
+    closeSheet(); S.day = d; S.weekStart = mondayOf(d); render();
+    toast(`${md(d)}(${DOW[dow(d)]}) ${t} 예약했어요 · 이번 주 ${weekCount(mid,d,null)}회째`);
+  },
+  async status(el){
+    const id = S.sheet.id, b = S.bookings[id], st = el.dataset.st; if (!b) return;
+    if (b.status==='canceled' && st!=='canceled' && conflict(b.date,b.time,id)) return toast('그 시간에 다른 예약이 있어요');
+    if (b.status==='canceled' && st!=='canceled' && overMax(b.memberId,b.date,id)) return toast(maxMsg(b.memberId));
+    const nd = deducts(st), diff = (nd?1:0) - (b.deducted?1:0);
+    if (!await save(()=>S.db.doc('bookings/'+id).update({ status:st, deducted:nd }))) return;
+    const m = S.members[b.memberId];
+    if (diff && m) await save(()=>S.db.doc('members/'+m.id).update({ remaining:(Number(m.remaining)||0) - diff }));
+    const msg = `${ST[st].l}(으)로 바꿨어요${diff>0?' · 1회 차감':diff<0?' · 1회 복구':''}`;
+    if (st==='canceled' && waitsAt(b.date,b.time).length) { waitSheet(b.date,b.time); toast(msg+' · 이 시간 대기자가 있어요'); return; }
+    closeSheet(); toast(msg);
+  },
+  async move(){
+    const id = S.sheet.id, b = S.bookings[id], d = $('#mv_d').value, t = $('#mv_t').value;
+    if (!d || !t) return toast('날짜와 시간을 넣어 주세요');
+    if (d===b.date && t===b.time) return toast('같은 시간이에요');
+    if (offType(d)) return toast(`그 날은 ${offType(d)}라 옮길 수 없어요`);
+    if (notOpen(d)) return toast(`그 주는 아직 안 열렸어요 · ${openLabel(d)}에 열려요`);
+    if (overMax(b.memberId, d, id)) return toast(maxMsg(b.memberId));
+    if (conflict(d,t,id)) return toast('그 시간에 다른 예약이 있어요');
+    if (!await save(()=>S.db.doc('bookings/'+id).update({ date:d, time:t, reminded:false }))) return;
+    S.day = d; S.weekStart = mondayOf(d);
+    const nb = { ...b, date:d, time:t };
+    openSheet(`<button class="x" data-act="close">×</button><h3>옮겼어요</h3>
+      <div class="sub">${md(d)}(${DOW[dow(d)]}) ${t}로 변경했어요. 회원님께 안내를 보내세요.</div>
+      <div class="msg">${esc(fill(S.settings.changeTpl, nb))}</div>
+      <button class="btn pri block" data-act="copyshare">변경 안내 복사</button>
+      ${waitsAt(b.date,b.time).length?`<div class="alert" style="margin-top:14px">🔔 원래 시간 ${md(b.date)} ${b.time}에 대기자 ${waitsAt(b.date,b.time).length}명이 있어요.<button data-act="waitsheet" data-date="${b.date}" data-time="${b.time}">대기 보기 ›</button></div>`:''}`, { kind:'share', txt: fill(S.settings.changeTpl, nb) });
+    render();
+  },
+  async note(){
+    const id = S.sheet.id;
+    if (await save(()=>S.db.doc('bookings/'+id).update({ note:$('#bk_note').value.trim() }))) toast('메모를 저장했어요');
+  },
+  copytext(el){ const b = S.bookings[S.sheet.id]; copy(fill(el.dataset.k==='chg'?S.settings.changeTpl:S.settings.remindTpl, b)); },
+  async delbk(){
+    if (!S.sheet.confirmDel){ S.sheet.confirmDel = true; bookingSheet(S.sheet.id); return; }
+    const id = S.sheet.id, b = S.bookings[id];
+    if (b && b.deducted && S.members[b.memberId]) {
+      const m = S.members[b.memberId];
+      await save(()=>S.db.doc('members/'+m.id).update({ remaining:(Number(m.remaining)||0)+1 }));
+    }
+    if (await save(()=>S.db.doc('bookings/'+id).delete())) {
+      if (b && active(b) && waitsAt(b.date,b.time).length) { waitSheet(b.date,b.time); toast('삭제했어요 · 이 시간 대기자가 있어요'); }
+      else { closeSheet(); toast('삭제했어요'); }
+    }
+  },
+  offs(){ offSheet(S.day); },
+  swapnote(el){
+    const w = (R.data.swaps||{})[el.dataset.id]; if (!w) return;
+    const a = S.bookings[w.fromBooking], b = S.bookings[w.toBooking], to = S.members[w.toMember] || {};
+    const txt = `${to.name||''} 회원님, 다른 회원님이 ${md(b.date)}(${DOW[dow(b.date)]}) ${b.time} 수업을 ${md(a.date)}(${DOW[dow(a.date)]}) ${a.time}로 바꾸고 싶어 하세요. 예약 페이지에서 수락 또는 거절해 주세요!\n${R.url||''}`;
+    openSheet(`<button class="x" data-act="close">×</button><h3>변경 요청 알리기</h3>
+      <div class="sub">${esc(mname(w.fromMember))} 회원이 ${esc(to.name||'')} 회원에게 요청했어요. 상대 회원이 페이지를 열어야 볼 수 있어서, 문자로 알려 주면 빨라요.</div>
+      <div class="msg">${esc(txt)}</div>
+      <div class="row"><button class="btn" data-act="copyshare">문구 복사</button>${to.phone?`<a class="btn pri" target="_top" style="text-align:center;text-decoration:none" href="${esc(smsHref(to.phone, txt))}">문자 보내기</a>`:''}</div>`, { kind:'share', txt });
+  },
+  waitsheet(el){ const d = el.dataset.date; S.day = d; S.weekStart = mondayOf(d); render(); waitSheet(d, el.dataset.time); },
+  async addwait(){
+    const mid = $('#w_m').value, { date, time } = S.sheet;
+    if (!mid) return toast('대기할 회원을 골라 주세요');
+    if (notOpen(date)) return toast(`그 주는 아직 안 열렸어요 · ${openLabel(date)}에 열려요`);
+    if (overMax(mid, date, null)) return toast(maxMsg(mid));
+    if (await save(()=>S.db.collection('waits').add({ memberId:mid, date, time, createdAt:Date.now() }))) { toast('대기에 올렸어요'); waitSheet(date, time); render(); }
+  },
+  copywait(el){ const w = S.waits[el.dataset.id]; if (w) copy(fill(S.settings.waitTpl, w)); },
+  async delwait(el){
+    const { date, time } = S.sheet;
+    if (await save(()=>S.db.doc('waits/'+el.dataset.id).delete())) { toast('대기에서 뺐어요'); waitSheet(date, time); render(); }
+  },
+  async confirmwait(el){
+    const w = S.waits[el.dataset.id]; if (!w) return;
+    if (offType(w.date)) return toast(`그 날은 ${offType(w.date)}라 예약할 수 없어요`);
+    if (notOpen(w.date)) return toast(`그 주는 아직 안 열렸어요 · ${openLabel(w.date)}에 열려요`);
+    if (overMax(w.memberId, w.date, null)) return toast(maxMsg(w.memberId));
+    if (conflict(w.date, w.time, null)) return toast('그 시간에 이미 예약이 있어요');
+    if (!await save(()=>S.db.collection('bookings').add({ memberId:w.memberId, date:w.date, time:w.time, status:'booked', deducted:false, reminded:false, note:'대기→예약', createdAt:Date.now() }))) return;
+    await save(()=>S.db.doc('waits/'+w.id).delete());
+    const txt = fill(S.settings.waitOkTpl, w), rest = waitsAt(w.date,w.time).filter(x=>x.id!==w.id).length;
+    openSheet(`<button class="x" data-act="close">×</button><h3>예약 확정했어요</h3>
+      <div class="sub">${esc(mname(w.memberId))} · ${md(w.date)}(${DOW[dow(w.date)]}) ${w.time}${rest?` · 남은 대기 ${rest}명은 그대로 대기 중이에요`:''}</div>
+      <div class="msg">${esc(txt)}</div><button class="btn pri block" data-act="copyshare">확정 안내 복사</button>`, { kind:'share', txt });
+    render();
+  },
+  quickoff(el){ offSheet(el.dataset.date); },
+  async addoff(el){
+    const type = $('#of_type').value, a = $('#of_from').value, b = $('#of_to').value || a;
+    if (!a) return toast('날짜를 골라 주세요');
+    if (b < a) return toast('끝나는 날이 시작일보다 빨라요');
+    const dates = []; for (let d=a; d<=b && dates.length<62; d=addDays(d,1)) dates.push(d);
+    const hit = Object.values(S.bookings).filter(x => x.status==='booked' && dates.includes(x.date)).sort((x,y)=>(x.date+x.time).localeCompare(y.date+y.time));
+    if (hit.length && !S.sheet.confirmOff){
+      S.sheet.confirmOff = true;
+      $('#of_warn').innerHTML = `<div class="banner" style="margin-top:10px">이 기간에 잡힌 수업이 ${hit.length}건 있어요:<br>${hit.map(x=>`${md(x.date)} ${x.time} ${esc(mname(x.memberId))}`).join('<br>')}<br>지정해도 수업은 지워지지 않아요. 따로 옮기거나 취소해 주세요. 계속하려면 한 번 더 누르세요.</div>`;
+      el.textContent = '그래도 지정하기'; return;
+    }
+    if (await setOff(dates, type)) { toast(`${dates.length}일을 ${type}(으)로 지정했어요`); offSheet(a); render(); }
+  },
+  async unoff(el){ if (await setOff([el.dataset.date], null)) { toast('해제했어요'); if (S.sheet && S.sheet.kind==='off') offSheet(S.sheet.date); render(); } },
+  remdate(el){ S.remDate = el.dataset.date; render(); },
+  copyrem(el){ copy(fill(S.settings.remindTpl, getB(el.dataset.id))); },
+  async sent(el){ const id = await materialize(el.dataset.id); if (!id) return; const b = S.bookings[id]; await save(()=>S.db.doc('bookings/'+id).update({ reminded:!b.reminded })); render(); },
+  member(el){ S.sheet = null; memberSheet(el.dataset.id || null); },
+  copyinvite(){ const m = S.members[S.sheet.id]; if (m) copy(inviteText(m)); },
+  async resetpin(){
+    const id = S.sheet.id;
+    if (!S.sheet.confirmReset){ S.sheet.confirmReset = true; memberSheet(id); return; }
+    if (await save(()=>S.db.doc('members/'+id).update({ resetPin:true }))) { toast('초기화했어요. 새 가입 문자를 보내 주세요'); S.sheet = null; await reload(); memberSheet(id); }
+  },
+  async reload(){ try { await reload(); toast('새로고침했어요'); } catch(e){} },
+  copyurl(el){ copy(el.dataset.u==='a' ? adminLink() : (R.url||'')); },
+  async changepw(){
+    const pw = $('#s_newpw').value; if (pw.length < 4) return toast('4자 이상으로 넣어 주세요');
+    try { await API('adminChangePw', R.tok, pw); toast('비밀번호를 바꿨어요'); $('#s_newpw').value=''; } catch(e){ toast(errMsg(e)); }
+  },
+  logout(){ doLogout(''); },
+  pushopen(){ PT.Push.openPanel(); },
+  async login(){
+    const pw = $('#lg_pw').value; if (!pw) return;
+    try { R.tok = await API('adminLogin', pw); try{ localStorage.setItem('pt_admin', R.tok); }catch(e){} S.login = null; render(); await startData(); }
+    catch(e){ if (S.login) { S.login.err = errMsg(e); render(); } }
+  },
+  async setup(){
+    const pw = $('#lg_pw').value, pw2 = $('#lg_pw2').value;
+    if (pw.length < 4) { S.login.err = '4자 이상으로 만들어 주세요.'; return render(); }
+    if (pw !== pw2) { S.login.err = '두 번 입력한 비밀번호가 달라요.'; return render(); }
+    try { R.tok = await API('adminSetup', pw); try{ localStorage.setItem('pt_admin', R.tok); }catch(e){} S.login = null; render(); await startData(); }
+    catch(e){ if (S.login) { S.login.err = errMsg(e); render(); } }
+  },
+  async addfix(){
+    const mid = S.sheet.id, dw = Number($('#fx_dow').value), t = $('#fx_t').value;
+    if (!t) return toast('시간을 넣어 주세요');
+    const clash = Object.values(S.fixed).find(f => Number(f.dow)===dw && f.time===t && S.members[f.memberId]);
+    if (clash) return toast(`그 시간은 ${mname(clash.memberId)} 회원님 고정이에요`);
+    if (await save(()=>S.db.collection('fixed').add({ memberId:mid, dow:dw, time:t, startDate:todayStr(), createdAt:Date.now() }))) { toast(`매주 ${DOW[dw]}요일 ${t} 고정했어요`); memberSheet(mid); render(); }
+  },
+  async unfix(el){
+    const fid = el.dataset.fid, f = S.fixed[fid]; if (!f) return;
+    if (await save(()=>S.db.doc('fixed/'+fid).delete())) {
+      delete S.fixed[fid]; toast('고정을 해제했어요. 이미 잡힌 예약은 그대로예요');
+      if (S.sheet?.kind==='member') memberSheet(S.sheet.id); else closeSheet(); render();
+    }
+  },
+  addrem(el){ const i=$('#m_rem'); i.value = (Number(i.value)||0) + Number(el.dataset.n); toast(`${el.dataset.n}회 더했어요. 저장을 눌러 주세요`); },
+  async savemember(){
+    const name = $('#m_name').value.trim(); if (!name) return toast('이름을 넣어 주세요');
+    const data = { name, phone:$('#m_phone').value.trim(), remaining:Number($('#m_rem').value)||0, memo:$('#m_memo').value.trim(),
+      avail: readGrid() };
+    const id = S.sheet.id;
+    const ok = await save(()=> id ? S.db.doc('members/'+id).update(data) : S.db.collection('members').add({ ...data, createdAt:Date.now() }));
+    if (ok){ closeSheet(); toast('저장했어요'); }
+  },
+  async delmember(){
+    const id = S.sheet.id;
+    if (!S.sheet.confirmDel){ S.sheet = { kind:'member', id, confirmDel:true }; memberSheet(id); return; }
+    const fut = Object.values(S.bookings).filter(b=>b.memberId===id && b.status==='booked' && b.date>=todayStr());
+    for (const b of fut) await save(()=>S.db.doc('bookings/'+b.id).update({ status:'canceled', deducted:false }));
+    if (await save(()=>S.db.doc('members/'+id).delete())) { closeSheet(); toast(`삭제했어요${fut.length?` · 예정 수업 ${fut.length}건 취소`:''}`); }
+  },
+  async savesettings(){
+    const closedDays = [...document.querySelectorAll('[data-dow]')].filter(x=>x.checked).map(x=>Number(x.dataset.dow));
+    const open = $('#s_open').value, close = $('#s_close').value;
+    if (toMin(close) <= toMin(open)) return toast('마감 시간이 첫 수업보다 늦어야 해요');
+    if ($('#s_we').checked && toMin($('#s_wec').value) <= toMin($('#s_weo').value)) return toast('주말 마감이 주말 첫 수업보다 늦어야 해요');
+    const s = { ...S.settings, trainerName:$('#s_name').value.trim(), openTime:open, closeTime:close, unit:Number($('#s_unit').value)||60, windowOn:$('#s_win').checked, openWeeks:Number($('#s_ow').value)||1, openDow:Number($('#s_odow').value), openAt:$('#s_oat').value||'00:00', maxPerWeek:Math.max(0, parseInt($('#s_max').value,10)||0), weekendOn:$('#s_we').checked, weekendOpen:$('#s_weo').value||'10:00', weekendClose:$('#s_wec').value||'18:00', splitOn:$('#s_split').checked, splitTime:$('#s_splitt').value||'18:00', daySplit:Object.fromEntries([1,2,3,4,5].map(i=>[String(i), ($('#s_ds'+i).value||'').trim()]).filter(([,v])=>/^\d{1,2}:\d{2}$/.test(v)).map(([k,v])=>[k, v.padStart(5,'0')])), unit2:Number($('#s_unit2').value)||50,
+      closedDays, lateDeduct:$('#s_late').checked, policy:$('#s_policy').value.trim(), remindTpl:$('#s_rem').value,
+      changeTpl:$('#s_chg').value, cutoffHours:Math.max(0, parseInt($('#s_cut').value,10)||0), inviteTpl:$('#s_inv').value, waitTpl:$('#s_wait').value, waitOkTpl:$('#s_waitok').value, shareHead:$('#s_head').value, shareTail:$('#s_tail').value };
+    if (await save(()=>S.db.doc('app/settings').set(s))) { S.settings = s; toast('설정을 저장했어요'); render(); }
+  }
+};
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]'); if (!el) return;
+  const f = A[el.dataset.act]; if (f) { e.preventDefault(); f(el, e); }
+});
+document.addEventListener('change', e => {
+  if (e.target.id === 'nb_d') drawMList($('#mq')?.value.trim()||'');
+  if (e.target.matches('[data-dow]')) e.target.closest('label').classList.toggle('on', e.target.checked);
+});
+document.addEventListener('input', e => { if (e.target.id === 'mq') drawMList(e.target.value.trim()); });
+
+/* ---------- 서버 연결 (구글 웹앱) ---------- */
+const R = { data:{}, subs:[], tok:null, url:'', loaded:false, timer:null };
+const API = PT.API;
+const errMsg = PT.errMsg;
+const adminLink = () => /github\.io/.test(R.url || '') ? (R.url || '').replace(/[^/]*$/, '') + 'admin.html' : (R.url || '') + '?admin=1';
+const rid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+const fireAll = () => R.subs.forEach(s => { try { s(); } catch(e){ console.error(e); } });
+function cmp(a, op, v){ return op==='>=' ? a>=v : op==='>' ? a>v : op==='<=' ? a<=v : op==='<' ? a<v : op==='==' ? a===v : op==='!=' ? a!==v : true; }
+const snapOf = (col, id) => { const o = (R.data[col]||{})[id]; return { id, exists:!!o, data:()=>o, metadata:{fromCache:false, hasPendingWrites:false} }; };
+let syncT = null;
+async function write(ops){
+  try { await API('adminWrite', R.tok, ops); }
+  catch(e){ throw new Error(errMsg(e)); }
+  ops.forEach(op => {
+    const c = (R.data[op.col] = R.data[op.col] || {});
+    if (op.op==='delete') delete c[op.id];
+    else if (op.op==='set') c[op.id] = { ...op.data, id:op.id };
+    else c[op.id] = { ...(c[op.id]||{}), ...op.data, id:op.id };
+  });
+  fireAll();
+  clearTimeout(syncT); syncT = setTimeout(()=>reload().catch(()=>{}), 1500);
+}
+function docRef(col, id){
+  return { id, path:col+'/'+id,
+    get: async () => snapOf(col, id),
+    set: data => write([{ op:'set', col, id, data }]),
+    update: data => write([{ op:'update', col, id, data }]),
+    delete: () => write([{ op:'delete', col, id }]),
+    onSnapshot(next){ const f = () => next(snapOf(col, id)); R.subs.push(f); if (R.loaded) f(); return () => {}; } };
+}
+function queryRef(col, filters){
+  return { path:col,
+    where: (f, op, v) => queryRef(col, [...filters, [f, op, v]]),
+    orderBy(){ return this; }, limit(){ return this; },
+    doc: id => docRef(col, id || rid()),
+    add: async data => { const id = rid(); await write([{ op:'set', col, id, data }]); return docRef(col, id); },
+    onSnapshot(next){
+      const f = () => { const docs = Object.values(R.data[col]||{}).filter(o => filters.every(([k,op,v]) => cmp(o[k], op, v))).map(o => ({ id:o.id, exists:true, data:()=>o }));
+        next({ docs, size:docs.length, empty:!docs.length, metadata:{fromCache:false, hasPendingWrites:false}, docChanges:()=>[] }); };
+      R.subs.push(f); if (R.loaded) f(); return () => {};
+    } };
+}
+const FAKE_DB = { doc: p => { const [c, i] = p.split('/'); return docRef(c, i); }, collection: c => queryRef(c, []) };
+
+async function reload(){
+  try {
+    const r = await API('adminLoad', R.tok);
+    R.data = r.db || {}; R.url = r.url || ''; R.loaded = true; fireAll();
+  } catch(e){
+    if (errMsg(e) === 'LOGIN') doLogout('다시 로그인해 주세요.');
+    else toast('불러오지 못했어요: ' + errMsg(e));
+    throw e;
+  }
+}
+function doLogout(msg){
+  try { localStorage.removeItem('pt_admin'); } catch(e){}
+  R.tok = null; R.loaded = false; R.subs = []; clearInterval(R.timer); PT.Push.setLoggedIn(false);
+  S.db = null; S.loaded = false; S.got = { m:false, b:false }; closeSheet();
+  S.login = { hasPw: true, err: msg }; render();
+  API('adminStatus').then(st => { S.login = { hasPw: st.hasPw, err: msg }; render(); }).catch(()=>{});
+}
+function vLogin(){
+  const L = S.login;
+  return `<div class="card" style="margin-top:20px">
+    <h3 style="margin:0 0 6px">${L.hasPw ? '관리자 로그인' : '관리자 비밀번호 만들기'}</h3>
+    <div class="hint">${L.hasPw ? '' : '처음 한 번만 만들어요. 4자 이상, 잊지 않게 적어 두세요.'}</div>
+    <input class="i" type="password" id="lg_pw" placeholder="비밀번호" style="margin-top:12px">
+    ${L.hasPw ? '' : '<input class="i" type="password" id="lg_pw2" placeholder="한 번 더 입력" style="margin-top:8px">'}
+    <button class="btn pri block" style="margin-top:12px" data-act="${L.hasPw ? 'login' : 'setup'}">${L.hasPw ? '로그인' : '만들고 시작하기'}</button>
+    ${L.err ? `<div class="banner" style="margin-top:10px">${esc(L.err)}</div>` : ''}
+  </div>`;
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.target.id === 'lg_pw' || e.target.id === 'lg_pw2')) { const b = document.querySelector('[data-act="login"],[data-act="setup"]'); if (b) b.click(); }
+});
+function inviteText(m){
+  const link = R.url || '(링크 준비 중)';
+  return String(S.settings.inviteTpl || DEFAULTS.inviteTpl)
+    .split('{이름}').join(m.name || '').split('{트레이너}').join(S.settings.trainerName || '')
+    .split('{링크}').join(link).split('{규정}').join(S.settings.policy || '');
+}
+
+function updateBell(){ const b = $('#pb'), s = PT.Push.state(); b.textContent = s === 'granted' ? '🔔' : '🔕'; b.style.display = (R.tok && s && !S.login) ? '' : 'none'; }
+PT.Push.onChange(updateBell);
+async function startData(){
+  await reload();
+  PT.Push.setLoggedIn(true, t => API('adminSavePush', R.tok, t), 'admin:' + R.tok);
+  updateBell();
+  const db = FAKE_DB; S.db = db;
+  const settle = () => { if (S.got.m && S.got.b) S.loaded = true; };
+  db.doc('app/settings').onSnapshot(snap => {
+    S.settings = { ...DEFAULTS, ...(snap.exists ? snap.data() : {}) };
+    if (S.tab === 'settings' && S.loaded) return; refresh();
+  });
+  db.doc('app/offdays').onSnapshot(snap => { S.off = (snap.exists && snap.data().days) || {}; refresh(); });
+  db.collection('fixed').onSnapshot(snap => { const o = {}; snap.docs.forEach(d => o[d.id] = { ...d.data(), id:d.id }); S.fixed = o; refresh(); });
+  db.collection('waits').where('date', '>=', addDays(todayStr(), -7)).onSnapshot(snap => { const o = {}; snap.docs.forEach(d => o[d.id] = { ...d.data(), id:d.id }); S.waits = o; refresh(); });
+  db.collection('members').onSnapshot(snap => { const o = {}; snap.docs.forEach(d => o[d.id] = { ...d.data(), id:d.id }); S.members = o; S.got.m = true; settle(); refresh(); });
+  db.collection('bookings').where('date', '>=', addDays(todayStr(), -120)).onSnapshot(snap => { const o = {}; snap.docs.forEach(d => o[d.id] = { ...d.data(), id:d.id }); S.bookings = o; S.got.b = true; settle(); refresh(); });
+  clearInterval(R.timer);
+  R.timer = setInterval(() => { if (document.visibilityState === 'visible' && !$('#sheet').classList.contains('open')) reload().catch(()=>{}); }, 30000);
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && R.tok && R.loaded) reload().catch(()=>{}); });
+
+/* ---------- boot ---------- */
+(async () => {
+  if (PT.escaping) return;
+  render();
+  let tok = null; try { tok = localStorage.getItem('pt_admin'); } catch(e){}
+  if (tok) { R.tok = tok; try { await startData(); return; } catch(e){ if (errMsg(e) !== 'LOGIN') { S.err = '연결하지 못했어요: ' + errMsg(e); render(); return; } } }
+  try { const st = await API('adminStatus'); S.login = { hasPw: st.hasPw, err: '' }; }
+  catch(e){ S.err = errMsg(e); }
+  render();
+})();
+</script>
+</body>
+</html>
