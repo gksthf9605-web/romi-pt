@@ -10,8 +10,10 @@
   PT.errMsg = function (e) { return String((e && e.message) || e || '').replace(/^(Exception|Error|ScriptError|TypeError):\s*/, '').trim(); };
   PT.API = function (fn) {
     var args = Array.prototype.slice.call(arguments, 1);
-    return fetch(APP_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn: fn, args: args }) })
-      .catch(function () { throw new Error('인터넷 연결을 확인하고 다시 시도해 주세요.'); })
+    var ctrl = window.AbortController ? new AbortController() : null, timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 30000) : null;
+    return fetch(APP_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn: fn, args: args }), signal: ctrl ? ctrl.signal : undefined })
+      .catch(function (e) { throw new Error(e && e.name === 'AbortError' ? '응답이 너무 늦어요. 잠시 후 다시 시도해 주세요.' : '인터넷 연결을 확인하고 다시 시도해 주세요.'); })
+      .finally(function () { if (timer) clearTimeout(timer); })
       .then(function (r) { return r.text(); })
       .then(function (t) {
         var j; try { j = JSON.parse(t); } catch (e) { throw new Error('서버 응답을 읽지 못했어요. 잠시 후 다시 시도해 주세요.'); }

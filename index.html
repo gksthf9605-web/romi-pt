@@ -165,11 +165,23 @@ function openSheet(html){ $('#pn').innerHTML = html; $('#sheet').classList.add('
 function closeSheet(){ $('#sheet').classList.remove('open'); $('#pn').innerHTML=''; }
 
 async function act(fn, ...args){
-  if (M.busy) return null;
-  M.busy = true; document.body.style.opacity = '.7';
-  try { const v = await API(fn, M.tok, ...args); if (v && v.days) setView(v); return v || true; }
+  // 다른 요청이 처리 중이면 끝날 때까지 기다렸다가 이어서 처리 (조용히 무시하지 않음)
+  while (M.busy) { await M.busy.catch(()=>{}); }
+  const slow = setTimeout(() => toast('처리 중이에요… 잠시만 기다려 주세요'), 1500);
+  document.body.style.opacity = '.7';
+  const p = API(fn, M.tok, ...args);
+  M.busy = p;
+  try { const v = await p; if (v && v.days) setView(v); return v || true; }
   catch(e){ const m = errMsg(e); if (m === 'LOGIN') logout('다시 로그인해 주세요.'); else toast(m); return null; }
-  finally { M.busy = false; document.body.style.opacity = ''; }
+  finally { clearTimeout(slow); if (M.busy === p) M.busy = null; document.body.style.opacity = ''; }
+}
+// 화면 자동 새로고침: 회원님이 누르는 동작을 막지 않도록 따로 처리
+async function bgRefresh(){
+  if (M.busy || M.bg || !M.tok || !M.v || $('#sheet').classList.contains('open')) return;
+  M.bg = true;
+  try { const v = await API('memberView', M.tok); if (v && v.days && !M.busy && !$('#sheet').classList.contains('open')) setView(v); }
+  catch(e){ if (errMsg(e) === 'LOGIN') logout('다시 로그인해 주세요.'); }
+  finally { M.bg = false; }
 }
 /* 앱 알림 상태가 바뀌면 화면 위 🔔 버튼 갱신 */
 PT.Push.onChange(() => { if (M.v) render(); });
@@ -273,6 +285,7 @@ function vBook(){
   else if (!d.slots.length) h += `<div class="empty">남은 시간이 없어요.</div>`;
   h += d.slots.map(s => {
     if (s.st === 'mine') return `<div class="slot mine"><div class="t">${s.time}</div><div class="s">내 예약 ✓</div></div>`;
+    if (s.st === 'blocked') return `<div class="slot taken"><div class="t">${s.time}</div><div class="s">🔒 ${esc(s.label || '회의')}</div></div>`;
     if (s.st === 'free') return `<div class="slot"><div class="t">${s.time}</div><div class="s">예약 가능</div>
       <button class="btn pri sm" data-act="pick" data-t="${s.time}">${M.moving?'여기로 옮기기':'예약하기'}</button></div>`;
     return `<div class="slot taken"><div class="t">${s.time}</div><div class="s">마감</div><div class="acts">
@@ -431,8 +444,8 @@ async function afterLogin(){
   M.err = ''; M.step = 'phone';
   const v = await act('memberView'); if (!v) render();
 }
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && M.tok && M.v && !$('#sheet').classList.contains('open')) act('memberView'); });
-setInterval(() => { if (document.visibilityState === 'visible' && M.tok && M.v && !$('#sheet').classList.contains('open')) act('memberView'); }, 60000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') bgRefresh(); });
+setInterval(() => { if (document.visibilityState === 'visible') bgRefresh(); }, 60000);
 
 (async () => {
   if (PT.escaping) return;  // 카톡 등에서 열렸으면 브라우저로 넘어갈 때까지 대기

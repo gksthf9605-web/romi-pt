@@ -201,7 +201,7 @@ document.addEventListener('click', e => {
   cells.forEach(x => x.classList.toggle('on', !allOn));
 });
 const DEFAULTS = {
-  trainerName:'로미', openTime:'06:00', closeTime:'23:00', unit:60, windowOn:true, openWeeks:1, openDow:1, openAt:'00:00', maxPerWeek:2, weekendOn:true, weekendOpen:'10:00', weekendClose:'18:00', splitOn:true, splitTime:'18:00', daySplit:{'3':'17:00'}, unit2:50, closedDays:[], lateDeduct:true, cutoffHours:4,
+  trainerName:'로미', openTime:'10:00', blockedSlots:['1-14:00|회의','4-14:00|회의'], closeTime:'23:00', unit:60, windowOn:true, openWeeks:1, openDow:1, openAt:'00:00', maxPerWeek:2, weekendOn:true, weekendOpen:'10:00', weekendClose:'18:00', splitOn:true, splitTime:'18:00', daySplit:{'3':'17:00'}, unit2:50, closedDays:[], lateDeduct:true, cutoffHours:4,
   inviteTpl:'[{트레이너} 트레이너 PT 예약 안내]\n{이름} 회원님, 이제 PT 예약·변경을 아래 링크에서 직접 하실 수 있어요!\n\n{링크}\n\n① 링크 열기 → ② 전화번호 입력 → ③ 이름 확인하고 비밀번호 숫자 4자리 만들기\n📲 가입 후 화면 위 [📲 앱] 버튼을 누르면 홈 화면에 추가하는 방법이 나와요.\n※ {규정}',
   policy:'일정 변경·취소는 수업 4시간 전까지 부탁드려요. 그 이후 취소와 노쇼는 1회 차감됩니다.',
   remindTpl:'안녕하세요 {이름} 회원님! {트레이너} 트레이너입니다 :)\n{언제} {날짜}({요일}) {시간} PT 수업 예정이에요.\n변경이 필요하시면 미리 말씀 부탁드려요! (남은 횟수 {남은횟수}회)',
@@ -233,7 +233,14 @@ function grid(d){
   const split = s.splitOn ? Math.min(Math.max(toMin(st), open), close) : close;
   for (let m = open; m + u1 <= split; m += u1) out.push(fromMin(m));
   if (s.splitOn) for (let m = split; m + u2 <= close; m += u2) out.push(fromMin(m));
-  return out;
+  return d ? out.filter(t => !blockedAt(d, t)) : out;
+}
+const blockedList = () => (Array.isArray(S.settings.blockedSlots) ? S.settings.blockedSlots : []).map(x => { const p = String(x).split('|'), k = p[0].split('-'); return { dow:Number(k[0]), time:k[1], label:(p[1]||'').trim() || '회의' }; });
+const blockedAt = (d, t) => blockedList().find(b => b.dow === dow(d) && b.time === t) || null;
+const blkLabel = k => { const p = String(k).split('|'), [d, t] = p[0].split('-'); return `매주 ${DOW[Number(d)]} ${t} · ${esc((p[1]||'').trim() || '회의')}`; };
+function drawBlk(){
+  const el = $('#blkList'); if (!el) return;
+  el.innerHTML = (S.blkDraft||[]).length ? S.blkDraft.map((k,i)=>`<div class="offrow"><span>${blkLabel(k)}</span><button class="btn" data-act="delblk" data-i="${i}">해제</button></div>`).join('') : '<div class="hint">없어요.</div>';
 }
 const offType = d => S.off[d] || ((S.settings.closedDays||[]).includes(dow(d)) ? '휴무 요일' : null);
 const waitsAt = (d,t) => Object.values(S.waits).filter(w => w.date===d && w.time===t && S.members[w.memberId]).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
@@ -374,7 +381,7 @@ function vSchedule(){
   } else {
     h += `<button class="link" style="margin:-6px 0 6px" data-act="quickoff" data-date="${d}">${md(d)}(${DOW[dow(d)]}) 쉬는 날로 지정 ›</button>`;
   }
-  const times = [...new Set([...grid(d), ...list.filter(active).map(b=>b.time)])].sort((a,b)=>toMin(a)-toMin(b));
+  const times = [...new Set([...grid(d), ...list.filter(active).map(b=>b.time), ...blockedList().filter(x=>x.dow===dow(d)).map(x=>x.time)])].sort((a,b)=>toMin(a)-toMin(b));
   const past = tm => d < t || (d===t && toMin(tm) <= nowMin());
   for (const tm of times){
     const b = list.find(x => x.time===tm && active(x));
@@ -387,8 +394,9 @@ function vSchedule(){
         <div class="n">${esc(mname(b.memberId))}<span class="chip c-${b.status}">${ST[b.status]?.l||''}</span>${b.reminded&&b.status==='booked'?'<span class="chip c-done">알림✓</span>':''}${waitsAt(d,tm).length?`<span class="chip c-wait">대기 ${waitsAt(d,tm).length}</span>`:''}</div>
         <div class="m">${rem}${b.note?' · '+esc(b.note):''}</div></button>`;
     } else {
-      const wn = waitsAt(d,tm).length;
-      h += wn && !past(tm) ? `<button class="empty" style="border-color:var(--acc);color:var(--acc);font-weight:700" data-act="waitsheet" data-date="${d}" data-time="${tm}">🔔 자리 남 · 대기 ${wn}명</button>`
+      const wn = waitsAt(d,tm).length, bl = blockedAt(d, tm);
+      h += bl ? `<div class="empty" style="border-style:solid;color:var(--sub);font-weight:700">🔒 ${esc(bl.label)}</div>`
+        : wn && !past(tm) ? `<button class="empty" style="border-color:var(--acc);color:var(--acc);font-weight:700" data-act="waitsheet" data-date="${d}" data-time="${tm}">🔔 자리 남 · 대기 ${wn}명</button>`
         : `<button class="empty ${past(tm)?'past':''}" data-act="newbk" data-time="${tm}">＋ 비어 있음</button>`;
     }
     h += `</div>`;
@@ -437,6 +445,7 @@ function vMembers(){
 }
 
 function vSettings(){
+  S.blkDraft = [...(S.settings.blockedSlots||[])]; setTimeout(drawBlk, 0);
   const s = S.settings, cd = s.closedDays||[];
   return `<div class="card">
     <label class="f">트레이너 이름 (문구에 들어가요)</label><input class="i" id="s_name" value="${esc(s.trainerName)}">
@@ -451,9 +460,10 @@ function vSettings(){
     <div class="row"><div><label class="f">이 시간부터</label><input class="i" type="time" id="s_splitt" value="${esc(s.splitTime)}"></div>
     <div><label class="f">바뀐 단위</label><select class="i" id="s_unit2">${[30,40,50,60,90].map(u=>`<option value="${u}" ${Number(s.unit2)===u?'selected':''}>${u}분</option>`).join('')}</select></div></div>
     <div class="hint">예: 18:00부터 50분 → 18:00 · 18:50 · 19:40 · 20:30 · 21:20 · 22:10</div>
-    <label class="f">요일별로 바뀌는 시각 (비워두면 위 시각)</label>
-    <div class="dows">${[1,2,3,4,5].map(i=>`<div style="flex:1;text-align:center;font-size:12px">${DOW[i]}<input class="i" style="padding:6px 2px;font-size:12px;margin-top:3px" id="s_ds${i}" placeholder="-" value="${esc((s.daySplit||{})[String(i)]||'')}"></div>`).join('')}</div>
-    <div class="hint">예: 수요일 칸에 17:00 → 수요일만 17:00부터 50분 단위</div>
+    <label class="f">요일별로 다르게 (그 요일만 50분 단위 시작 시각 바꾸기)</label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 10px">${[1,2,3,4,5].map(i=>{ const cur=(s.daySplit||{})[String(i)]||''; const opts=['']; for(let m=12*60;m<=21*60;m+=30) opts.push(fromMin(m)); if(cur&&!opts.includes(cur)) opts.push(cur);
+      return `<label style="display:flex;align-items:center;gap:6px;font-size:14px;font-weight:700"><span style="width:20px">${DOW[i]}</span><select class="i" style="padding:8px" id="s_ds${i}">${opts.map(o=>`<option value="${o}" ${o===cur?'selected':''}>${o||'기본 ('+esc(s.splitTime||'18:00')+')'}</option>`).join('')}</select></label>`; }).join('')}</div>
+    <div class="hint">예: 수요일을 17:00으로 고르면 수요일만 17:00부터 50분 단위예요. '기본'은 위에서 정한 시각을 그대로 써요. 바꾼 뒤 맨 아래 '설정 저장'을 눌러 주세요.</div>
     <label class="f" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="s_win" ${s.windowOn?'checked':''} style="width:18px;height:18px"> 예약을 일주일씩 열기</label>
     <label class="f">몇 주 전에 열까요</label><select class="i" id="s_ow">${[1,2,3].map(n=>`<option value="${n}" ${openWeeks()===n?'selected':''}>${n}주 전</option>`).join('')}</select>
     <div class="row"><div><label class="f">열리는 요일</label><select class="i" id="s_odow">${[1,2,3,4,5,6,0].map(i=>`<option value="${i}" ${Number(s.openDow??0)===i?'selected':''}>${DOW[i]}요일</option>`).join('')}</select></div>
@@ -462,6 +472,12 @@ function vSettings(){
     <label class="f">한 회원 주당 최대 예약 (0 = 제한 없음)</label><input class="i" id="s_max" inputmode="numeric" value="${esc(s.maxPerWeek ?? 2)}">
     <div class="hint">월~일 기준이에요. 취소된 수업은 세지 않고, 완료·노쇼·당일취소는 세요.</div>
     <label class="f">회원이 직접 변경·취소할 수 있는 마감 (수업 몇 시간 전까지)</label><input class="i" id="s_cut" inputmode="numeric" value="${esc(s.cutoffHours ?? 4)}">
+    <label class="f">매주 막아 둘 시간 (그 시간만 예약 불가)</label>
+    <div id="blkList"></div>
+    <div class="row" style="margin-top:6px"><select class="i" id="bk_dow">${[1,2,3,4,5,6,0].map(i=>`<option value="${i}">${DOW[i]}요일</option>`).join('')}</select>
+      <input class="i" type="time" id="bk_t" value="14:00" step="300"></div>
+    <div class="row" style="margin-top:6px"><input class="i" id="bk_l" value="회의" placeholder="표시할 이름 (예: 회의)"><button class="btn" style="flex:none" data-act="addblk">추가</button></div>
+    <div class="hint">추가·해제한 뒤 맨 아래 '설정 저장'을 눌러야 적용돼요.</div>
     <label class="f">매주 쉬는 요일 (예약이 막혀요)</label><div class="dows">${[1,2,3,4,5,6,0].map(i=>`<label class="${cd.includes(i)?'on':''}"><input type="checkbox" data-dow="${i}" ${cd.includes(i)?'checked':''}>${DOW[i]}</label>`).join('')}</div>
     <label class="f" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="s_late" ${s.lateDeduct?'checked':''} style="width:18px;height:18px"> 당일 취소도 1회 차감</label>
   </div>
@@ -784,6 +800,13 @@ const A = {
     try { await API('adminChangePw', R.tok, pw); toast('비밀번호를 바꿨어요'); $('#s_newpw').value=''; } catch(e){ toast(errMsg(e)); }
   },
   logout(){ doLogout(''); },
+  addblk(){
+    const d = $('#bk_dow').value, t = $('#bk_t').value; if (!t) return toast('시간을 넣어 주세요');
+    const lab = ($('#bk_l').value || '').replace(/\|/g, '').trim() || '회의';
+    S.blkDraft = S.blkDraft.filter(x => String(x).split('|')[0] !== d + '-' + t); S.blkDraft.push(d + '-' + t + '|' + lab);
+    drawBlk();
+  },
+  delblk(el){ S.blkDraft.splice(Number(el.dataset.i), 1); drawBlk(); },
   pushopen(){ PT.Push.openPanel(); },
   async login(){
     const pw = $('#lg_pw').value; if (!pw) return;
@@ -833,7 +856,7 @@ const A = {
     if (toMin(close) <= toMin(open)) return toast('마감 시간이 첫 수업보다 늦어야 해요');
     if ($('#s_we').checked && toMin($('#s_wec').value) <= toMin($('#s_weo').value)) return toast('주말 마감이 주말 첫 수업보다 늦어야 해요');
     const s = { ...S.settings, trainerName:$('#s_name').value.trim(), openTime:open, closeTime:close, unit:Number($('#s_unit').value)||60, windowOn:$('#s_win').checked, openWeeks:Number($('#s_ow').value)||1, openDow:Number($('#s_odow').value), openAt:$('#s_oat').value||'00:00', maxPerWeek:Math.max(0, parseInt($('#s_max').value,10)||0), weekendOn:$('#s_we').checked, weekendOpen:$('#s_weo').value||'10:00', weekendClose:$('#s_wec').value||'18:00', splitOn:$('#s_split').checked, splitTime:$('#s_splitt').value||'18:00', daySplit:Object.fromEntries([1,2,3,4,5].map(i=>[String(i), ($('#s_ds'+i).value||'').trim()]).filter(([,v])=>/^\d{1,2}:\d{2}$/.test(v)).map(([k,v])=>[k, v.padStart(5,'0')])), unit2:Number($('#s_unit2').value)||50,
-      closedDays, lateDeduct:$('#s_late').checked, policy:$('#s_policy').value.trim(), remindTpl:$('#s_rem').value,
+      closedDays, blockedSlots:[...(S.blkDraft||[])], lateDeduct:$('#s_late').checked, policy:$('#s_policy').value.trim(), remindTpl:$('#s_rem').value,
       changeTpl:$('#s_chg').value, cutoffHours:Math.max(0, parseInt($('#s_cut').value,10)||0), inviteTpl:$('#s_inv').value, waitTpl:$('#s_wait').value, waitOkTpl:$('#s_waitok').value, shareHead:$('#s_head').value, shareTail:$('#s_tail').value };
     if (await save(()=>S.db.doc('app/settings').set(s))) { S.settings = s; toast('설정을 저장했어요'); render(); }
   }
