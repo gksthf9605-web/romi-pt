@@ -82,7 +82,10 @@ nav.tabs button span{display:block;font-size:18px;margin-bottom:2px}
 .slot .empty{flex:1;border:1.5px dashed var(--line);background:transparent;border-radius:12px;padding:12px;text-align:left;color:var(--mute);font-size:14px}
 .slot .empty.past{opacity:.4}
 .bk{flex:1;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:10px 12px;text-align:left;border-left:5px solid var(--acc)}
+.bk{cursor:pointer}
 .bk .n{font-weight:700;font-size:15px}
+.bk .qd{margin-left:8px;border:1px solid var(--done);color:var(--done);background:var(--card);border-radius:99px;padding:3px 10px;font-size:12px;font-weight:700;vertical-align:1px}
+.bk .qd:disabled{opacity:.5}
 .bk .m{font-size:12px;color:var(--sub);margin-top:2px}
 .bk.s-done{border-left-color:var(--done);opacity:.8}
 .bk.s-noshow{border-left-color:var(--bad)}
@@ -442,9 +445,10 @@ function vSchedule(){
     if (b){
       const m = S.members[b.memberId];
       const rem = m ? `남은 ${m.remaining??0}회` : '';
-      h += `<button class="bk s-${b.status}" data-act="booking" data-id="${b.id}">
-        <div class="n">${esc(mname(b.memberId))}<span class="chip c-${b.status}">${ST[b.status]?.l||''}</span>${b.reminded&&b.status==='booked'?'<span class="chip c-done">알림✓</span>':''}${waitsAt(d,tm).length?`<span class="chip c-wait">대기 ${waitsAt(d,tm).length}</span>`:''}</div>
-        <div class="m">${rem}${b.note?' · '+esc(b.note):''}</div></button>`;
+      const qd = b.status==='booked' && d <= t;
+      h += `<div class="bk s-${b.status}" role="button" tabindex="0" data-act="booking" data-id="${b.id}">
+        <div class="n">${esc(mname(b.memberId))}<span class="chip c-${b.status}">${ST[b.status]?.l||''}</span>${qd?`<button class="qd" data-act="quickdone" data-id="${b.id}">✅ 완료</button>`:''}${b.reminded&&b.status==='booked'?'<span class="chip c-done">알림✓</span>':''}${waitsAt(d,tm).length?`<span class="chip c-wait">대기 ${waitsAt(d,tm).length}</span>`:''}</div>
+        <div class="m">${rem}${b.note?' · '+esc(b.note):''}</div></div>`;
     } else {
       const wn = waitsAt(d,tm).length, bl = blockedAt(d, tm);
       h += bl ? `<button class="empty" style="border-style:solid;color:var(--sub);font-weight:700" data-act="blocks" data-date="${d}">🔒 ${esc(bl.label)}${bl.hide?' <span style="font-weight:500">· 회원에겐 마감</span>':''}</button>`
@@ -558,6 +562,15 @@ function vSettings(){
 }
 
 /* ---------- sheets ---------- */
+async function setStatus(id, st){
+  const b = S.bookings[id]; if (!b) return null;
+  if (b.status==='canceled' && st!=='canceled' && conflict(b.date,b.time,id)) { toast('그 시간에 다른 예약이 있어요'); return null; }
+  const nd = deducts(st), diff = (nd?1:0) - (b.deducted?1:0);
+  if (!await save(()=>S.db.doc('bookings/'+id).update({ status:st, deducted:nd }))) return null;
+  const m = S.members[b.memberId];
+  if (diff && m) await save(()=>S.db.doc('members/'+m.id).update({ remaining:(Number(m.remaining)||0) - diff }));
+  return { diff };
+}
 function bookingSheet(id){
   const b = S.bookings[id]; if (!b) return;
   const m = S.members[b.memberId] || {};
@@ -736,14 +749,16 @@ const A = {
     closeSheet(); S.day = d; S.weekStart = mondayOf(d); render();
     toast(`${md(d)}(${DOW[dow(d)]}) ${t} 예약했어요 · 이번 주 ${weekCount(mid,d,null)}회째`);
   },
+  async quickdone(el){
+    el.disabled = true;
+    const id = await materialize(el.dataset.id); if (!id) { el.disabled=false; return; }
+    const r = await setStatus(id, 'done'); if (!r) { el.disabled=false; return; }
+    render(); toast(`${mname(S.bookings[id]?.memberId)} 수업 완료${r.diff>0?' · 1회 차감':''} · 되돌리려면 카드를 눌러 주세요`);
+  },
   async status(el){
     const id = S.sheet.id, b = S.bookings[id], st = el.dataset.st; if (!b) return;
-    if (b.status==='canceled' && st!=='canceled' && conflict(b.date,b.time,id)) return toast('그 시간에 다른 예약이 있어요');
-    const nd = deducts(st), diff = (nd?1:0) - (b.deducted?1:0);
-    if (!await save(()=>S.db.doc('bookings/'+id).update({ status:st, deducted:nd }))) return;
-    const m = S.members[b.memberId];
-    if (diff && m) await save(()=>S.db.doc('members/'+m.id).update({ remaining:(Number(m.remaining)||0) - diff }));
-    const msg = `${ST[st].l}(으)로 바꿨어요${diff>0?' · 1회 차감':diff<0?' · 1회 복구':''}`;
+    const r = await setStatus(id, st); if (!r) return;
+    const msg = `${ST[st].l}(으)로 바꿨어요${r.diff>0?' · 1회 차감':r.diff<0?' · 1회 복구':''}`;
     if (st==='canceled' && waitsAt(b.date,b.time).length) { waitSheet(b.date,b.time); toast(msg+' · 이 시간 대기자가 있어요'); return; }
     closeSheet(); toast(msg);
   },
