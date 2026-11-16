@@ -407,7 +407,7 @@ function vSchedule(){
     <button class="btn" data-act="today">오늘</button></div><div class="days">`;
   for (let i=0;i<7;i++){
     const d = addDays(ws,i), n = onDate(d).filter(active).length, ot = offType(d);
-    h += `<button class="day ${d===S.day?'on':''} ${d===t?'today':''} ${ot||notOpen(d)?'off':''}" data-act="day" data-date="${d}">
+    h += `<button class="day ${d===S.day?'on':''} ${d===t?'today':''} ${ot?'off':''}" data-act="day" data-date="${d}">
       <span>${DOW[dow(d)]}</span><b>${parseD(d).getDate()}</b><i>${ot ? (S.off[d] ? esc(S.off[d]) : '휴무') : notOpen(d) ? '오픈 전' : (n?n+'건':'')}</i></button>`;
   }
   h += `</div><div class="toolbar">
@@ -425,10 +425,9 @@ function vSchedule(){
     const cur = splitOf(d), own = !!(S.settings.dateSplit || {})[d];
     h += `<div class="splitbar">50분 수업 시작 ${['17:00','18:00'].map(v=>`<button class="${cur===v?'on':''}" data-act="setsplit" data-v="${v}">${v}</button>`).join('')}<span style="font-weight:500">${own?'이 날만 설정됨':'기본값'}</span></div>`;
   }
-  const dOff = offType(d) || (notOpen(d) ? '오픈 전' : null);
-  if (dOff === '오픈 전'){
-    h += `<div class="banner"><b>아직 예약이 열리지 않은 주예요</b> · ${openLabel(d)}에 열려요.</div>`;
-  } else if (dOff){
+  const dOff = offType(d);
+  if (!dOff && notOpen(d)) h += `<div class="note" style="background:var(--acc-soft);color:var(--acc);border-radius:10px;padding:8px 12px;font-size:13px;margin-bottom:8px">회원에게는 <b>${openLabel(d)}</b>에 열려요 · 관리자는 지금 미리 예약할 수 있어요.</div>`;
+  if (dOff){
     const left = list.filter(b=>b.status==='booked').length;
     h += `<div class="banner"><b>${esc(dOff)}</b> · 이 날은 예약을 받지 않아요.${S.off[d]?` <button class="link" style="padding:0;margin-left:4px" data-act="unoff" data-date="${d}">해제</button>`:''}${left?`<br>잡혀 있는 수업 ${left}건이 있어요. 옮기거나 취소해 주세요.`:''}</div>`;
   } else {
@@ -645,7 +644,7 @@ function memberSheet(id){
 
 function waitSheet(d, t){
   const ws = waitsAt(d,t), cur = onDate(d).find(x => x.time===t && active(x));
-  const isPast = d < todayStr() || (d===todayStr() && toMin(t) <= nowMin()), free = !cur && !offType(d) && !notOpen(d) && !isPast;
+  const isPast = d < todayStr() || (d===todayStr() && toMin(t) <= nowMin()), free = !cur && !offType(d) && !isPast;
   const taken = new Set([...ws.map(w=>w.memberId), cur?.memberId]);
   const opts = Object.values(S.members).filter(m=>!taken.has(m.id)).sort((a,b)=>String(a.name).localeCompare(String(b.name),'ko'));
   openSheet(`<button class="x" data-act="close">×</button>
@@ -722,7 +721,6 @@ const A = {
     const d = $('#nb_d').value, t = $('#nb_t').value, note = $('#nb_note').value.trim();
     if (!d || !t) return toast('날짜와 시간을 넣어 주세요');
     if (offType(d)) return toast(`그 날은 ${offType(d)}라 예약할 수 없어요`);
-    if (notOpen(d)) return toast(`그 주는 아직 안 열렸어요 · ${openLabel(d)}에 열려요`);
     if (conflict(d,t,null)) return toast('이미 예약이 있는 시간이에요');
     let mid = S.sheet.pick;
     if (!S.sheet.newMode && !mid) return toast('회원을 골라 주세요');
@@ -754,7 +752,6 @@ const A = {
     if (!d || !t) return toast('날짜와 시간을 넣어 주세요');
     if (d===b.date && t===b.time) return toast('같은 시간이에요');
     if (offType(d)) return toast(`그 날은 ${offType(d)}라 옮길 수 없어요`);
-    if (notOpen(d)) return toast(`그 주는 아직 안 열렸어요 · ${openLabel(d)}에 열려요`);
     if (conflict(d,t,id)) return toast('그 시간에 다른 예약이 있어요');
     if (!await save(()=>S.db.doc('bookings/'+id).update({ date:d, time:t, reminded:false }))) return;
     S.day = d; S.weekStart = mondayOf(d);
@@ -863,7 +860,6 @@ const A = {
   async addwait(){
     const mid = $('#w_m').value, { date, time } = S.sheet;
     if (!mid) return toast('대기할 회원을 골라 주세요');
-    if (notOpen(date)) return toast(`그 주는 아직 안 열렸어요 · ${openLabel(date)}에 열려요`);
     if (await save(()=>S.db.collection('waits').add({ memberId:mid, date, time, createdAt:Date.now() }))) { toast('대기에 올렸어요'); waitSheet(date, time); render(); }
   },
   copywait(el){ const w = S.waits[el.dataset.id]; if (w) copy(fill(S.settings.waitTpl, w)); },
@@ -874,7 +870,6 @@ const A = {
   async confirmwait(el){
     const w = S.waits[el.dataset.id]; if (!w) return;
     if (offType(w.date)) return toast(`그 날은 ${offType(w.date)}라 예약할 수 없어요`);
-    if (notOpen(w.date)) return toast(`그 주는 아직 안 열렸어요 · ${openLabel(w.date)}에 열려요`);
     if (conflict(w.date, w.time, null)) return toast('그 시간에 이미 예약이 있어요');
     if (!await save(()=>S.db.collection('bookings').add({ memberId:w.memberId, date:w.date, time:w.time, status:'booked', deducted:false, reminded:false, note:'대기→예약', createdAt:Date.now() }))) return;
     await save(()=>S.db.doc('waits/'+w.id).delete());
