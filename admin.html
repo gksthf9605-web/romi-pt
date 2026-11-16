@@ -64,6 +64,9 @@ nav.tabs button span{display:block;font-size:18px;margin-bottom:2px}
 .day.on.off{opacity:1}
 .offrow{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
 .offrow:last-child{border-bottom:0}
+.splitbar{display:flex;align-items:center;gap:8px;margin:-2px 0 10px;font-size:13px;color:var(--sub);font-weight:700}
+.splitbar button{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:6px 14px;font-weight:700;font-size:13px}
+.splitbar button.on{background:var(--acc);border-color:var(--acc);color:#fff}
 .c-wait{background:#ede4ff;color:#6d28d9}
 @media (prefers-color-scheme: dark){ .c-wait{background:#3a2a5c;color:#d8c8ff} }
 .wrow{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px}
@@ -226,12 +229,13 @@ const deducts = st => st==='done' || st==='noshow' || (st==='late' && !!S.settin
 const active = b => b.status !== 'canceled';
 const mname = id => S.members[id]?.name || '(삭제된 회원)';
 const isWeekend = d => d && (dow(d)===0 || dow(d)===6);
+const splitOf = d => { const s = S.settings; return (d && s.dateSplit && s.dateSplit[d]) || (d && s.daySplit && s.daySplit[String(dow(d))]) || s.splitTime; };
 function grid(d){ const out = rawGrid(d); return d ? out.filter(t => !blockedAt(d, t)) : out; }
 function rawGrid(d){
   const s = S.settings, we = s.weekendOn && isWeekend(d);
   const out = [], open = toMin(we ? s.weekendOpen : s.openTime), close = toMin(we ? s.weekendClose : s.closeTime);
   const u1 = Math.max(10, Number(s.unit)||60), u2 = Math.max(10, Number(s.unit2)||50);
-  const st = (d && s.daySplit && s.daySplit[String(dow(d))]) || s.splitTime;
+  const st = splitOf(d);
   const split = s.splitOn ? Math.min(Math.max(toMin(st), open), close) : close;
   for (let m = open; m + u1 <= split; m += u1) out.push(fromMin(m));
   if (s.splitOn) for (let m = split; m + u2 <= close; m += u2) out.push(fromMin(m));
@@ -275,6 +279,7 @@ function parseBulk(txt){
     return { raw, name, phone, st:'new' };
   });
 }
+function rawGridWith(d, ds){ const keep = S.settings.dateSplit; S.settings.dateSplit = ds; try { return rawGrid(d); } finally { S.settings.dateSplit = keep; } }
 async function saveDateBlocks(arr){
   const cut = addDays(todayStr(), -1);
   const s = { ...S.settings, dateBlocks: arr.filter(x => String(x).slice(0,10) >= cut) };
@@ -416,6 +421,10 @@ function vSchedule(){
   const ow = openWaitSlots();
   if (ow.length) h += `<div class="alert">🔔 <b>자리 난 대기 ${ow.length}건</b> · 대기 회원에게 연락해 보세요${ow.map(x=>`<button data-act="waitsheet" data-date="${x.date}" data-time="${x.time}">${md(x.date)}(${DOW[dow(x.date)]}) ${x.time} · 대기 ${x.n}명 ›</button>`).join('')}</div>`;
   const d = S.day, list = onDate(d);
+  if (S.settings.splitOn && !(S.settings.weekendOn && isWeekend(d)) && d >= t) {
+    const cur = splitOf(d), own = !!(S.settings.dateSplit || {})[d];
+    h += `<div class="splitbar">50분 수업 시작 ${['17:00','18:00'].map(v=>`<button class="${cur===v?'on':''}" data-act="setsplit" data-v="${v}">${v}</button>`).join('')}<span style="font-weight:500">${own?'이 날만 설정됨':'기본값'}</span></div>`;
+  }
   const dOff = offType(d) || (notOpen(d) ? '오픈 전' : null);
   if (dOff === '오픈 전'){
     h += `<div class="banner"><b>아직 예약이 열리지 않은 주예요</b> · ${openLabel(d)}에 열려요.</div>`;
@@ -775,6 +784,21 @@ const A = {
     }
   },
   offs(){ offSheet(S.day); },
+  async setsplit(el){
+    const d = S.day, v = el.dataset.v;
+    if (splitOf(d) === v) return;
+    const cut = addDays(todayStr(), -1), ds = {};
+    Object.entries(S.settings.dateSplit || {}).forEach(([k, x]) => { if (k >= cut) ds[k] = x; });
+    const base = (S.settings.daySplit || {})[String(dow(d))] || S.settings.splitTime;
+    if (v === base) delete ds[d]; else ds[d] = v;
+    const moving = onDate(d).filter(b => b.status === 'booked' && !rawGridWith(d, ds).includes(b.time)).length;
+    const s = { ...S.settings, dateSplit: ds };
+    if (await save(()=>S.db.doc('app/settings').set(s))) {
+      S.settings = s; render();
+      toast(`${md(d)}(${DOW[dow(d)]}) 50분 수업을 ${v}부터로 바꿨어요${moving ? ` · 수업 ${moving}건을 새 시간으로 옮기고 회원에게 알렸어요` : ''}`);
+      setTimeout(() => reload().catch(()=>{}), 1500);
+    }
+  },
   bulk(){
     openSheet(`<button class="x" data-act="close">×</button>
       <h3>📥 회원 한꺼번에 추가</h3>
