@@ -717,7 +717,6 @@ const A = {
     if (conflict(d,t,null)) return toast('이미 예약이 있는 시간이에요');
     let mid = S.sheet.pick;
     if (!S.sheet.newMode && !mid) return toast('회원을 골라 주세요');
-    if (!S.sheet.newMode && overMax(mid, d, null)) return toast(maxMsg(mid));
     el.disabled = true;
     if (S.sheet.newMode){
       const name = $('#nm_name').value.trim(); if (!name){ el.disabled=false; return toast('회원 이름을 넣어 주세요'); }
@@ -733,7 +732,6 @@ const A = {
   async status(el){
     const id = S.sheet.id, b = S.bookings[id], st = el.dataset.st; if (!b) return;
     if (b.status==='canceled' && st!=='canceled' && conflict(b.date,b.time,id)) return toast('그 시간에 다른 예약이 있어요');
-    if (b.status==='canceled' && st!=='canceled' && overMax(b.memberId,b.date,id)) return toast(maxMsg(b.memberId));
     const nd = deducts(st), diff = (nd?1:0) - (b.deducted?1:0);
     if (!await save(()=>S.db.doc('bookings/'+id).update({ status:st, deducted:nd }))) return;
     const m = S.members[b.memberId];
@@ -748,7 +746,6 @@ const A = {
     if (d===b.date && t===b.time) return toast('같은 시간이에요');
     if (offType(d)) return toast(`그 날은 ${offType(d)}라 옮길 수 없어요`);
     if (notOpen(d)) return toast(`그 주는 아직 안 열렸어요 · ${openLabel(d)}에 열려요`);
-    if (overMax(b.memberId, d, id)) return toast(maxMsg(b.memberId));
     if (conflict(d,t,id)) return toast('그 시간에 다른 예약이 있어요');
     if (!await save(()=>S.db.doc('bookings/'+id).update({ date:d, time:t, reminded:false }))) return;
     S.day = d; S.weekStart = mondayOf(d);
@@ -843,7 +840,6 @@ const A = {
     const mid = $('#w_m').value, { date, time } = S.sheet;
     if (!mid) return toast('대기할 회원을 골라 주세요');
     if (notOpen(date)) return toast(`그 주는 아직 안 열렸어요 · ${openLabel(date)}에 열려요`);
-    if (overMax(mid, date, null)) return toast(maxMsg(mid));
     if (await save(()=>S.db.collection('waits').add({ memberId:mid, date, time, createdAt:Date.now() }))) { toast('대기에 올렸어요'); waitSheet(date, time); render(); }
   },
   copywait(el){ const w = S.waits[el.dataset.id]; if (w) copy(fill(S.settings.waitTpl, w)); },
@@ -855,7 +851,6 @@ const A = {
     const w = S.waits[el.dataset.id]; if (!w) return;
     if (offType(w.date)) return toast(`그 날은 ${offType(w.date)}라 예약할 수 없어요`);
     if (notOpen(w.date)) return toast(`그 주는 아직 안 열렸어요 · ${openLabel(w.date)}에 열려요`);
-    if (overMax(w.memberId, w.date, null)) return toast(maxMsg(w.memberId));
     if (conflict(w.date, w.time, null)) return toast('그 시간에 이미 예약이 있어요');
     if (!await save(()=>S.db.collection('bookings').add({ memberId:w.memberId, date:w.date, time:w.time, status:'booked', deducted:false, reminded:false, note:'대기→예약', createdAt:Date.now() }))) return;
     await save(()=>S.db.doc('waits/'+w.id).delete());
@@ -955,7 +950,7 @@ const A = {
     const s = { ...S.settings, trainerName:$('#s_name').value.trim(), openTime:open, closeTime:close, unit:Number($('#s_unit').value)||60, windowOn:$('#s_win').checked, openWeeks:Number($('#s_ow').value)||1, openDow:Number($('#s_odow').value), openAt:$('#s_oat').value||'00:00', maxPerWeek:Math.max(0, parseInt($('#s_max').value,10)||0), weekendOn:$('#s_we').checked, weekendOpen:$('#s_weo').value||'10:00', weekendClose:$('#s_wec').value||'18:00', splitOn:$('#s_split').checked, splitTime:$('#s_splitt').value||'18:00', daySplit:Object.fromEntries([1,2,3,4,5].map(i=>[String(i), ($('#s_ds'+i).value||'').trim()]).filter(([,v])=>/^\d{1,2}:\d{2}$/.test(v)).map(([k,v])=>[k, v.padStart(5,'0')])), unit2:Number($('#s_unit2').value)||50,
       closedDays, blockedSlots:[...(S.blkDraft||[])], lateDeduct:$('#s_late').checked, policy:$('#s_policy').value.trim(), remindTpl:$('#s_rem').value,
       changeTpl:$('#s_chg').value, cutoffHours:Math.max(0, parseInt($('#s_cut').value,10)||0), inviteTpl:$('#s_inv').value, waitTpl:$('#s_wait').value, waitOkTpl:$('#s_waitok').value, shareHead:$('#s_head').value, shareTail:$('#s_tail').value };
-    if (await save(()=>S.db.doc('app/settings').set(s))) { S.settings = s; toast('설정을 저장했어요'); render(); }
+    if (await save(()=>S.db.doc('app/settings').set(s))) { S.settings = s; toast('설정을 저장했어요 · 시간표가 바뀌면 기존 수업은 새 시간으로 옮기고 회원에게 알려요'); render(); }
   }
 };
 document.addEventListener('click', e => {

@@ -280,7 +280,8 @@ function vBook(){
   if (d) h += `<div class="sec" style="margin-top:14px">${md(d.date)}(${DOW[dow(d.date)]}) 시간 선택</div>`;
   if (!d) return h + `<div class="empty">예약할 수 있는 날이 없어요.</div>`;
   const wc = v.weeks[mondayOf(d.date)] || 0;
-  if (v.max) h += `<div class="wk">${md(mondayOf(d.date))} 주 예약 ${wc}/${v.max}회${wc>=v.max?' · 이 주는 더 예약할 수 없어요':''}</div>`;
+  if (v.max) h += `<div class="wk">${md(mondayOf(d.date))} 주 예약 ${wc}/${v.max}회${wc>=v.max?' · 이 주는 다 찼어요':''}</div>`;
+  if (v.max && wc >= v.max && !M.moving) h += `<div class="note">이번 주 ${v.max}회 예약을 다 하셨어요. <b>추가 수업을 원하시면 트레이너에게 문의해 주세요.</b></div>`;
   if (d.off) h += `<div class="banner">${esc(d.off==='휴무 요일'?'휴무':d.off)} · 예약을 받지 않는 날이에요.</div>`;
   else if (!d.slots.length) h += `<div class="empty">남은 시간이 없어요.</div>`;
   h += d.slots.map(s => {
@@ -378,6 +379,12 @@ const H = {
   },
   pick(el){
     const t = el.dataset.t, d = M.day;
+    const wc = M.v.weeks[mondayOf(d)] || 0;
+    if (!M.moving && M.v.max && wc >= M.v.max) {
+      openSheet(`<h3>이번 주 예약을 다 하셨어요</h3><div class="sub">한 주에 ${M.v.max}회까지 직접 예약할 수 있어요.<br><b>추가 수업을 원하시면 트레이너에게 문의해 주세요.</b></div>
+        <div class="row"><button class="btn pri" data-act="close">확인</button></div>`);
+      return;
+    }
     if (M.moving) {
       openSheet(`<h3>시간을 옮길까요?</h3><div class="sub">${when(M.moving.date,M.moving.time)} → <b>${when(d,t)}</b></div>
         <div class="row"><button class="btn" data-act="close">아니요</button><button class="btn pri" data-act="domove" data-d="${d}" data-t="${t}">옮기기</button></div>`);
