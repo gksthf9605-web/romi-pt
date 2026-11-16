@@ -259,6 +259,22 @@ function blockSheet(date, time){
     ${list.length ? list.map(b=>`<div class="offrow"><span>${md(b.date)}(${DOW[dow(b.date)]}) ${b.from}${b.to?'~'+b.to:''} · ${esc(b.label)}${b.hide?' <span class="hint" style="margin:0">(회원: 마감)</span>':''}</span><button class="btn" data-act="deldb" data-raw="${esc(b.raw)}">해제</button></div>`).join('') : '<div class="hint">없어요.</div>'}
     <div class="hint" style="margin-top:10px">매주 같은 시간은 설정 탭 '매주 막아 둘 시간'에서 막을 수 있어요.</div>`, { kind:'block' });
 }
+function parseBulk(txt){
+  const have = new Set(Object.values(S.members).map(m => String(m.phone||'').replace(/\D/g,'')).filter(Boolean));
+  const seen = new Set();
+  return String(txt||'').split(/\r?\n/).map(s => s.trim()).filter(Boolean).map(raw => {
+    const clean = raw.replace(/[()\[\]]/g, ' ');
+    const pm = clean.match(/01[016789][\s.-]*\d{3,4}[\s.-]*\d{4}/);
+    const digits = pm ? pm[0].replace(/\D/g,'') : '';
+    const name = clean.replace(pm ? pm[0] : '', ' ').split(/[\t,|]+|\s{2,}/).map(x => x.trim()).filter(x => x && !/^\d+$/.test(x)).join(' ')
+      .replace(/^\d+[.)]?\s*/, '').trim();
+    if (!digits || !name) return { raw, st:'bad' };
+    const phone = digits.length === 11 ? `${digits.slice(0,3)}-${digits.slice(3,7)}-${digits.slice(7)}` : `${digits.slice(0,3)}-${digits.slice(3,6)}-${digits.slice(6)}`;
+    if (have.has(digits) || seen.has(digits)) return { raw, name, phone, st:'dup' };
+    seen.add(digits);
+    return { raw, name, phone, st:'new' };
+  });
+}
 async function saveDateBlocks(arr){
   const cut = addDays(todayStr(), -1);
   const s = { ...S.settings, dateBlocks: arr.filter(x => String(x).slice(0,10) >= cut) };
@@ -458,7 +474,7 @@ function vRemind(){
 
 function vMembers(){
   const ms = Object.values(S.members).sort((a,b)=>String(a.name).localeCompare(String(b.name),'ko'));
-  let h = `<button class="btn pri block" data-act="member" data-id="">＋ 회원 추가</button>`;
+  let h = `<div class="row" style="margin:0 0 4px"><button class="btn pri" data-act="member" data-id="">＋ 회원 추가</button><button class="btn" data-act="bulk">📥 여러 명 한꺼번에</button></div>`;
   if (!ms.length) return h + `<div class="notice">아직 등록된 회원이 없어요.<br>회원을 추가하면 예약할 때 바로 고를 수 있어요.</div>`;
   const low = ms.filter(m => (Number(m.remaining)||0) <= 2);
   const row = m => {
@@ -762,6 +778,37 @@ const A = {
     }
   },
   offs(){ offSheet(S.day); },
+  bulk(){
+    openSheet(`<button class="x" data-act="close">×</button>
+      <h3>📥 회원 한꺼번에 추가</h3>
+      <div class="sub">엑셀·구글 시트·메모에서 <b>이름과 전화번호</b>가 있는 줄을 그대로 복사해서 붙여넣으세요. 한 줄에 한 명이에요.</div>
+      <textarea class="i" id="bk_txt" style="min-height:220px" placeholder="예)\n김가나 010-1234-5678\n이다라\t01023456789"></textarea>
+      <label class="f">남은 PT 횟수 (모두 같은 값으로 들어가요, 나중에 회원별로 고칠 수 있어요)</label>
+      <input class="i" id="bk_rem" inputmode="numeric" value="0">
+      <button class="btn block" style="margin-top:12px" data-act="bulkcheck">미리 보기</button>
+      <div id="bk_prev"></div>`, { kind:'bulk' });
+  },
+  bulkcheck(){
+    const rows = parseBulk($('#bk_txt').value);
+    S.sheet.rows = rows;
+    const add = rows.filter(r => r.st === 'new'), dup = rows.filter(r => r.st === 'dup'), bad = rows.filter(r => r.st === 'bad');
+    $('#bk_prev').innerHTML = `<div class="card" style="margin-top:12px">
+      <b>새로 추가 ${add.length}명</b> · 이미 등록 ${dup.length}명 · 확인 필요 ${bad.length}줄
+      ${add.length ? `<div class="hint" style="margin-top:8px">${add.map(r=>`${esc(r.name)} ${esc(r.phone)}`).join('<br>')}</div>` : ''}
+      ${dup.length ? `<div class="hint" style="margin-top:8px">이미 등록돼서 건너뛰어요: ${dup.map(r=>esc(r.name)).join(', ')}</div>` : ''}
+      ${bad.length ? `<div class="hint" style="margin-top:8px;color:var(--warn)">이름이나 전화번호를 못 찾은 줄: ${bad.map(r=>esc(r.raw)).join(' / ')}</div>` : ''}
+    </div>${add.length ? `<button class="btn pri block" data-act="bulkadd">${add.length}명 추가하기</button>` : ''}`;
+  },
+  async bulkadd(el){
+    const add = (S.sheet.rows || []).filter(r => r.st === 'new'); if (!add.length) return;
+    const rem = Math.max(0, parseInt($('#bk_rem').value, 10) || 0);
+    el.disabled = true; el.textContent = '추가하는 중…';
+    const ops = add.map(r => ({ op:'set', col:'members', id:rid(), data:{ name:r.name, phone:r.phone, remaining:rem, memo:'', createdAt:Date.now() } }));
+    let done = 0;
+    try { for (let i = 0; i < ops.length; i += 20) { await write(ops.slice(i, i + 20)); done += Math.min(20, ops.length - i); } }
+    catch(e){ toast(`${done}명까지 추가했어요. 나머지는 다시 시도해 주세요: ${errMsg(e)}`); el.disabled = false; return; }
+    closeSheet(); S.tab = 'members'; render(); toast(`${done}명을 추가했어요. 회원을 눌러 가입 문자를 보내 주세요`);
+  },
   blocks(el){ blockSheet(el.dataset.date || S.day, ''); },
   blockhere(){ blockSheet($('#nb_d').value, $('#nb_t').value); },
   dbl(el){ $('#db_l').value = el.dataset.v; },
