@@ -285,7 +285,8 @@ function vBook(){
   else if (!d.slots.length) h += `<div class="empty">남은 시간이 없어요.</div>`;
   h += d.slots.map(s => {
     if (s.st === 'mine') return `<div class="slot mine"><div class="t">${s.time}</div><div class="s">내 예약 ✓</div></div>`;
-    if (s.st === 'blocked') return `<div class="slot taken"><div class="t">${s.time}</div><div class="s">🔒 ${esc(s.label || '회의')}</div></div>`;
+    if (s.st === 'blocked') return s.hide ? `<div class="slot taken"><div class="t">${s.time}</div><div class="s">마감</div></div>`
+      : `<div class="slot taken"><div class="t">${s.time}</div><div class="s">🔒 ${esc(s.label || '회의')}</div></div>`;
     if (s.st === 'free') return `<div class="slot"><div class="t">${s.time}</div><div class="s">예약 가능</div>
       <button class="btn pri sm" data-act="pick" data-t="${s.time}">${M.moving?'여기로 옮기기':'예약하기'}</button></div>`;
     return `<div class="slot taken"><div class="t">${s.time}</div><div class="s">마감</div><div class="acts">

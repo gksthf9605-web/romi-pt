@@ -71,7 +71,8 @@ nav.tabs button span{display:block;font-size:18px;margin-bottom:2px}
 .alert{background:var(--acc-soft);border:1px solid var(--acc);border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:14px}
 .alert button{display:block;width:100%;text-align:left;border:0;background:none;padding:6px 0;color:var(--acc);font-weight:700}
 .toolbar{display:flex;gap:8px;margin-bottom:12px}
-.toolbar .btn{flex:1;font-size:13px;padding:9px 6px}
+.toolbar{flex-wrap:wrap}
+.toolbar .btn{flex:1 1 45%;font-size:13px;padding:9px 6px}
 .daynote{font-size:13px;color:var(--sub);margin:-4px 2px 10px}
 .slot{display:flex;gap:10px;align-items:stretch;margin-bottom:7px}
 .slot .t{width:50px;flex:none;font-size:13px;font-weight:700;color:var(--sub);padding-top:13px;text-align:right}
@@ -201,7 +202,7 @@ document.addEventListener('click', e => {
   cells.forEach(x => x.classList.toggle('on', !allOn));
 });
 const DEFAULTS = {
-  trainerName:'로미', openTime:'10:00', blockedSlots:['1-14:00|회의','4-14:00|회의'], closeTime:'23:00', unit:60, windowOn:true, openWeeks:1, openDow:1, openAt:'00:00', maxPerWeek:2, weekendOn:true, weekendOpen:'10:00', weekendClose:'18:00', splitOn:true, splitTime:'18:00', daySplit:{'3':'17:00'}, unit2:50, closedDays:[], lateDeduct:true, cutoffHours:4,
+  trainerName:'로미', openTime:'10:00', blockedSlots:['1-14:00|회의','4-14:00|회의'], dateBlocks:[], closeTime:'23:00', unit:60, windowOn:true, openWeeks:1, openDow:1, openAt:'00:00', maxPerWeek:2, weekendOn:true, weekendOpen:'10:00', weekendClose:'18:00', splitOn:true, splitTime:'18:00', daySplit:{'3':'17:00'}, unit2:50, closedDays:[], lateDeduct:true, cutoffHours:4,
   inviteTpl:'[{트레이너} 트레이너 PT 예약 안내]\n{이름} 회원님, 이제 PT 예약·변경을 아래 링크에서 직접 하실 수 있어요!\n\n{링크}\n\n① 링크 열기 → ② 전화번호 입력 → ③ 이름 확인하고 비밀번호 숫자 4자리 만들기\n📲 가입 후 화면 위 [📲 앱] 버튼을 누르면 홈 화면에 추가하는 방법이 나와요.\n※ {규정}',
   policy:'일정 변경·취소는 수업 4시간 전까지 부탁드려요. 그 이후 취소와 노쇼는 1회 차감됩니다.',
   remindTpl:'안녕하세요 {이름} 회원님! {트레이너} 트레이너입니다 :)\n{언제} {날짜}({요일}) {시간} PT 수업 예정이에요.\n변경이 필요하시면 미리 말씀 부탁드려요! (남은 횟수 {남은횟수}회)',
@@ -225,7 +226,8 @@ const deducts = st => st==='done' || st==='noshow' || (st==='late' && !!S.settin
 const active = b => b.status !== 'canceled';
 const mname = id => S.members[id]?.name || '(삭제된 회원)';
 const isWeekend = d => d && (dow(d)===0 || dow(d)===6);
-function grid(d){
+function grid(d){ const out = rawGrid(d); return d ? out.filter(t => !blockedAt(d, t)) : out; }
+function rawGrid(d){
   const s = S.settings, we = s.weekendOn && isWeekend(d);
   const out = [], open = toMin(we ? s.weekendOpen : s.openTime), close = toMin(we ? s.weekendClose : s.closeTime);
   const u1 = Math.max(10, Number(s.unit)||60), u2 = Math.max(10, Number(s.unit2)||50);
@@ -233,11 +235,36 @@ function grid(d){
   const split = s.splitOn ? Math.min(Math.max(toMin(st), open), close) : close;
   for (let m = open; m + u1 <= split; m += u1) out.push(fromMin(m));
   if (s.splitOn) for (let m = split; m + u2 <= close; m += u2) out.push(fromMin(m));
-  return d ? out.filter(t => !blockedAt(d, t)) : out;
+  return out;
 }
-const blockedList = () => (Array.isArray(S.settings.blockedSlots) ? S.settings.blockedSlots : []).map(x => { const p = String(x).split('|'), k = p[0].split('-'); return { dow:Number(k[0]), time:k[1], label:(p[1]||'').trim() || '회의' }; });
-const blockedAt = (d, t) => blockedList().find(b => b.dow === dow(d) && b.time === t) || null;
-const blkLabel = k => { const p = String(k).split('|'), [d, t] = p[0].split('-'); return `매주 ${DOW[Number(d)]} ${t} · ${esc((p[1]||'').trim() || '회의')}`; };
+const blockedList = () => (Array.isArray(S.settings.blockedSlots) ? S.settings.blockedSlots : []).map(x => { const p = String(x).split('|'), k = p[0].split('-'); return { dow:Number(k[0]), time:k[1], label:(p[1]||'').trim() || '회의', hide:p[2]==='1' }; });
+const dateBlockList = () => (Array.isArray(S.settings.dateBlocks) ? S.settings.dateBlocks : []).map((x, i) => { const p = String(x).split('|'), m = p[0].match(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})(?:~(\d{2}:\d{2}))?$/); return m ? { i, raw:x, date:m[1], from:m[2], to:m[3]||'', label:(p[1]||'').trim() || '개인 일정', hide:p[2]==='1' } : null; }).filter(Boolean);
+const blockedAt = (d, t) => blockedList().find(b => b.dow === dow(d) && b.time === t)
+  || dateBlockList().find(b => b.date === d && (b.to ? toMin(t) >= toMin(b.from) && toMin(t) < toMin(b.to) : t === b.from)) || null;
+const blkLabel = k => { const p = String(k).split('|'), [d, t] = p[0].split('-'); return `매주 ${DOW[Number(d)]} ${t} · ${esc((p[1]||'').trim() || '회의')}${p[2]==='1' ? ' (회원에겐 마감)' : ''}`; };
+function blockSheet(date, time){
+  const t0 = todayStr(), list = dateBlockList().filter(b => b.date >= t0).sort((a,b)=>(a.date+a.from).localeCompare(b.date+b.from));
+  openSheet(`<button class="x" data-act="close">×</button>
+    <h3>⏸ 시간 막기</h3>
+    <div class="sub">식사, 운동, 공부처럼 개인 일정이 있는 시간을 예약 못 하게 막아요.</div>
+    <label class="f">날짜</label><input class="i" type="date" id="db_d" value="${date || S.day}">
+    <div class="row"><div><label class="f">시작</label><input class="i" type="time" id="db_f" value="${time || ''}" step="300"></div>
+      <div><label class="f">끝 (한 칸만이면 비우기)</label><input class="i" type="time" id="db_t" step="300"></div></div>
+    <label class="f">이유 (관리자만 보여요)</label><input class="i" id="db_l" value="개인 일정">
+    <div class="row" style="margin-top:6px">${['식사','운동','블로그','공부'].map(x=>`<button class="btn" data-act="dbl" data-v="${x}">${x}</button>`).join('')}</div>
+    <label class="f" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="db_h" checked style="width:18px;height:18px"> 회원에게는 '마감'으로 보이기</label>
+    <div class="hint">끄면 회원에게도 이유가 그대로 보여요 (예: 🔒 회의).</div>
+    <button class="btn pri block" style="margin-top:14px" data-act="adddb">막기</button>
+    <h4>앞으로 막아 둔 시간</h4>
+    ${list.length ? list.map(b=>`<div class="offrow"><span>${md(b.date)}(${DOW[dow(b.date)]}) ${b.from}${b.to?'~'+b.to:''} · ${esc(b.label)}${b.hide?' <span class="hint" style="margin:0">(회원: 마감)</span>':''}</span><button class="btn" data-act="deldb" data-raw="${esc(b.raw)}">해제</button></div>`).join('') : '<div class="hint">없어요.</div>'}
+    <div class="hint" style="margin-top:10px">매주 같은 시간은 설정 탭 '매주 막아 둘 시간'에서 막을 수 있어요.</div>`, { kind:'block' });
+}
+async function saveDateBlocks(arr){
+  const cut = addDays(todayStr(), -1);
+  const s = { ...S.settings, dateBlocks: arr.filter(x => String(x).slice(0,10) >= cut) };
+  if (await save(()=>S.db.doc('app/settings').set(s))) { S.settings = s; return true; }
+  return false;
+}
 function drawBlk(){
   const el = $('#blkList'); if (!el) return;
   el.innerHTML = (S.blkDraft||[]).length ? S.blkDraft.map((k,i)=>`<div class="offrow"><span>${blkLabel(k)}</span><button class="btn" data-act="delblk" data-i="${i}">해제</button></div>`).join('') : '<div class="hint">없어요.</div>';
@@ -365,7 +392,8 @@ function vSchedule(){
   h += `</div><div class="toolbar">
     <button class="btn" data-act="share">📋 빈 시간 문구</button>
     <button class="btn" data-act="newbk" data-time="">＋ 예약 추가</button>
-    <button class="btn" data-act="offs">🌙 휴무·월차</button></div>`;
+    <button class="btn" data-act="offs">🌙 휴무·월차</button>
+    <button class="btn" data-act="blocks" data-date="${S.day}">⏸ 시간 막기</button></div>`;
   const sw = Object.values(R.data.swaps||{}).filter(w => w.status==='pending' && S.bookings[w.fromBooking] && S.bookings[w.toBooking]);
   if (sw.length) h += `<div class="alert">🔁 <b>회원 간 변경 요청 ${sw.length}건</b> · 상대 회원이 아직 답하지 않았어요${sw.map(w => { const a = S.bookings[w.fromBooking], b = S.bookings[w.toBooking];
     return `<button data-act="swapnote" data-id="${w.id}">${esc(mname(w.fromMember))} ${md(a.date)} ${a.time} ↔ ${esc(mname(w.toMember))} ${md(b.date)} ${b.time} ›</button>`; }).join('')}</div>`;
@@ -381,7 +409,7 @@ function vSchedule(){
   } else {
     h += `<button class="link" style="margin:-6px 0 6px" data-act="quickoff" data-date="${d}">${md(d)}(${DOW[dow(d)]}) 쉬는 날로 지정 ›</button>`;
   }
-  const times = [...new Set([...grid(d), ...list.filter(active).map(b=>b.time), ...blockedList().filter(x=>x.dow===dow(d)).map(x=>x.time)])].sort((a,b)=>toMin(a)-toMin(b));
+  const times = [...new Set([...rawGrid(d), ...list.filter(active).map(b=>b.time), ...blockedList().filter(x=>x.dow===dow(d)).map(x=>x.time)])].sort((a,b)=>toMin(a)-toMin(b));
   const past = tm => d < t || (d===t && toMin(tm) <= nowMin());
   for (const tm of times){
     const b = list.find(x => x.time===tm && active(x));
@@ -395,7 +423,7 @@ function vSchedule(){
         <div class="m">${rem}${b.note?' · '+esc(b.note):''}</div></button>`;
     } else {
       const wn = waitsAt(d,tm).length, bl = blockedAt(d, tm);
-      h += bl ? `<div class="empty" style="border-style:solid;color:var(--sub);font-weight:700">🔒 ${esc(bl.label)}</div>`
+      h += bl ? `<button class="empty" style="border-style:solid;color:var(--sub);font-weight:700" data-act="blocks" data-date="${d}">🔒 ${esc(bl.label)}${bl.hide?' <span style="font-weight:500">· 회원에겐 마감</span>':''}</button>`
         : wn && !past(tm) ? `<button class="empty" style="border-color:var(--acc);color:var(--acc);font-weight:700" data-act="waitsheet" data-date="${d}" data-time="${tm}">🔔 자리 남 · 대기 ${wn}명</button>`
         : `<button class="empty ${past(tm)?'past':''}" data-act="newbk" data-time="${tm}">＋ 비어 있음</button>`;
     }
@@ -477,6 +505,7 @@ function vSettings(){
     <div class="row" style="margin-top:6px"><select class="i" id="bk_dow">${[1,2,3,4,5,6,0].map(i=>`<option value="${i}">${DOW[i]}요일</option>`).join('')}</select>
       <input class="i" type="time" id="bk_t" value="14:00" step="300"></div>
     <div class="row" style="margin-top:6px"><input class="i" id="bk_l" value="회의" placeholder="표시할 이름 (예: 회의)"><button class="btn" style="flex:none" data-act="addblk">추가</button></div>
+    <label class="f" style="display:flex;align-items:center;gap:8px;margin-top:6px"><input type="checkbox" id="bk_h" style="width:18px;height:18px"> 회원에게는 '마감'으로 보이기</label>
     <div class="hint">추가·해제한 뒤 맨 아래 '설정 저장'을 눌러야 적용돼요.</div>
     <label class="f">매주 쉬는 요일 (예약이 막혀요)</label><div class="dows">${[1,2,3,4,5,6,0].map(i=>`<label class="${cd.includes(i)?'on':''}"><input type="checkbox" data-dow="${i}" ${cd.includes(i)?'checked':''}>${DOW[i]}</label>`).join('')}</div>
     <label class="f" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="s_late" ${s.lateDeduct?'checked':''} style="width:18px;height:18px"> 당일 취소도 1회 차감</label>
@@ -550,7 +579,8 @@ function newBookingSheet(time){
       ${hasM?'<button class="link" data-act="newmtoggle">기존 회원에서 고르기</button>':''}
     </div>
     <label class="f">메모 (선택)</label><input class="i" id="nb_note">
-    <button class="btn pri block" style="margin-top:16px" data-act="createbk">예약하기</button>`,
+    <button class="btn pri block" style="margin-top:16px" data-act="createbk">예약하기</button>
+    <button class="link" data-act="blockhere">⏸ 대신 이 시간 막기 (개인 일정)</button>`,
     { kind:'new', pick:null, newMode:!hasM });
   drawMList('');
 }
@@ -732,6 +762,26 @@ const A = {
     }
   },
   offs(){ offSheet(S.day); },
+  blocks(el){ blockSheet(el.dataset.date || S.day, ''); },
+  blockhere(){ blockSheet($('#nb_d').value, $('#nb_t').value); },
+  dbl(el){ $('#db_l').value = el.dataset.v; },
+  async adddb(el){
+    const d = $('#db_d').value, f = $('#db_f').value, t = $('#db_t').value;
+    if (!d || !f) return toast('날짜와 시작 시간을 넣어 주세요');
+    if (t && toMin(t) <= toMin(f)) return toast('끝 시간이 시작보다 늦어야 해요');
+    const lab = ($('#db_l').value || '').replace(/\|/g, '').trim() || '개인 일정';
+    const entry = `${d} ${f}${t ? '~' + t : ''}|${lab}${$('#db_h').checked ? '|1' : ''}`;
+    const hit = onDate(d).filter(b => active(b) && (t ? toMin(b.time) >= toMin(f) && toMin(b.time) < toMin(t) : b.time === f));
+    el.disabled = true;
+    if (await saveDateBlocks([...(S.settings.dateBlocks || []), entry])) {
+      toast(hit.length ? `막았어요 · 그 시간에 이미 예약 ${hit.length}건이 있어요. 따로 옮기거나 취소해 주세요` : `${md(d)} ${f}${t ? '~' + t : ''} 막았어요`);
+      S.day = d; S.weekStart = mondayOf(d); render(); blockSheet(d, '');
+    } else el.disabled = false;
+  },
+  async deldb(el){
+    const raw = el.dataset.raw;
+    if (await saveDateBlocks((S.settings.dateBlocks || []).filter(x => x !== raw))) { toast('해제했어요'); render(); blockSheet(S.day, ''); }
+  },
   swapnote(el){
     const w = (R.data.swaps||{})[el.dataset.id]; if (!w) return;
     const a = S.bookings[w.fromBooking], b = S.bookings[w.toBooking], to = S.members[w.toMember] || {};
@@ -803,7 +853,7 @@ const A = {
   addblk(){
     const d = $('#bk_dow').value, t = $('#bk_t').value; if (!t) return toast('시간을 넣어 주세요');
     const lab = ($('#bk_l').value || '').replace(/\|/g, '').trim() || '회의';
-    S.blkDraft = S.blkDraft.filter(x => String(x).split('|')[0] !== d + '-' + t); S.blkDraft.push(d + '-' + t + '|' + lab);
+    S.blkDraft = S.blkDraft.filter(x => String(x).split('|')[0] !== d + '-' + t); S.blkDraft.push(d + '-' + t + '|' + lab + ($('#bk_h').checked ? '|1' : ''));
     drawBlk();
   },
   delblk(el){ S.blkDraft.splice(Number(el.dataset.i), 1); drawBlk(); },
