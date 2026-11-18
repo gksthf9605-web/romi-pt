@@ -189,6 +189,7 @@ const toMin = t => { const [h,m] = String(t).split(':').map(Number); return (h||
 const fromMin = m => `${pad(Math.floor(m/60))}:${pad(m%60)}`;
 const todayStr = () => ds(new Date());
 const nowMin = () => { const d = new Date(); return d.getHours()*60 + d.getMinutes(); };
+const startMs = (d, t) => new Date(`${d}T${t}:00`).getTime();
 
 const AV_BANDS = [[6,9],[9,12],[12,15],[15,18],[18,21],[21,23]];
 const AV_DAYS = [1,2,3,4,5,6,0];
@@ -307,6 +308,8 @@ function parseBulk(txt){
   });
 }
 async function saveDaySetting(part, msg, moving){
+  const stuck = planDay(S.day, part);
+  if (stuck.length) return toast(`빈 시간이 없어 옮길 수 없는 수업이 있어요: ${stuck.join(', ')} · 먼저 옮기거나 취소해 주세요`);
   const s = { ...S.settings, ...part };
   if (await save(()=>S.db.doc('app/settings').set(s))) {
     S.settings = s; render();
@@ -363,7 +366,32 @@ function fixedOn(d){
 }
 const getB = id => S.bookings[id] || S.vmap[id];
 const onDate = d => Object.values(S.bookings).filter(b => b.date === d).concat(fixedOn(d));
-const conflict = (d,t,except) => onDate(d).some(x => x.id!==except && x.time===t && active(x));
+function durAt(d, t){
+  const s = S.settings, u1 = Math.max(10, Number(s.unit)||60), u2 = Math.max(10, Number(s.unit2)||50);
+  if (!s.splitOn || (s.weekendOn && isWeekend(d)) || toMin(t) < toMin(splitOf(d))) return u1;
+  const i = eveIdx(d, t); return u2 + (i >= 0 && (((s.dateExt||{})[d])||[]).includes(i) ? 10 : 0);
+}
+/* 같은 시간뿐 아니라 수업 시간이 조금이라도 겹치는 수업 */
+const overlapOf = (d, t, except, list, skip) => (list || onDate(d)).find(x => { if (x.id===except || !active(x) || (skip && skip.has(x))) return false;
+  const a = toMin(t), ae = a + durAt(d, t), b = toMin(x.time), be = b + durAt(d, x.time); return a < be && b < ae; }) || null;
+const conflict = (d,t,except) => !!overlapOf(d, t, except);
+/* 그날 시간표를 바꾸면 못 옮기는 수업이 생기는지 미리 확인 (서버와 같은 방식) */
+function planDay(d, over){
+  const oldG = rawGrid(d), now = Date.now();
+  return withS(over, () => {
+    const ng = rawGrid(d), list = onDate(d).filter(active).map(x => ({ ...x })), stuck = [];
+    const movers = list.filter(x => !x.virtual && x.status==='booked' && !ng.includes(x.time) && oldG.includes(x.time) && startMs(d, x.time) > now)
+      .sort((a,b)=>toMin(a.time)-toMin(b.time)), pend = new Set(movers);
+    movers.forEach(x => {
+        pend.delete(x);
+        const c = ng.filter(y => startMs(d, y) > now).sort((p,q)=>(Math.abs(toMin(p)-toMin(x.time)) - Math.abs(toMin(q)-toMin(x.time))) || (toMin(q)-toMin(p)));
+        const nt = c.find(y => !overlapOf(d, y, x.id, list, pend));
+        if (nt) x.time = nt; else stuck.push(x);
+      });
+    list.forEach(x => { if (!stuck.includes(x) && overlapOf(d, x.time, x.id, list) && startMs(d, x.time) > now) stuck.push(x); });
+    return [...new Set(stuck.map(x => `${mname(x.memberId)} ${x.time}`))];
+  });
+}
 async function materialize(id){
   const v = S.vmap[id]; if (!v) return id;
   const data = { memberId:v.memberId, date:v.date, time:v.time, status:'booked', deducted:false, reminded:false, note:'', fixedId:v.fixedId, fixedDate:v.fixedDate, createdAt:Date.now() };
@@ -485,10 +513,11 @@ function vSchedule(){
       const rem = m ? `남은 ${m.remaining??0}회` : '';
       const qd = b.status==='booked' && d <= t;
       const ei = eveIdx(d, tm), ext = ei >= 0 && (((S.settings.dateExt||{})[d])||[]).includes(ei);
-      const ex = ei >= 0 && b.status==='booked' && !past(tm) ? `<button class="qd ex ${ext?'on':''}" data-act="ext" data-i="${ei}">${ext?'60분 ✓':'+10분'}</button>` : '';
+      const ended = d < t || (d===t && toMin(tm) + durAt(d, tm) <= nowMin());
+      const ex = ei >= 0 && b.status==='booked' && !ended ? `<button class="qd ex ${ext?'on':''}" data-act="ext" data-i="${ei}">${ext?'60분 ✓':'+10분'}</button>` : '';
       const FBL = { good:'😊 좋았어요', hard:'😮‍💨 힘들었어요', pain:'🤕 아픈 곳 있었어요' };
       h += `<div class="bk s-${b.status}" role="button" tabindex="0" data-act="booking" data-id="${b.id}">
-        <div class="n">${esc(mname(b.memberId))}<span class="chip c-${b.status}">${ST[b.status]?.l||''}</span>${qd?`<button class="qd" data-act="quickdone" data-id="${b.id}">✅ 완료</button>`:''}${ex}${b.fb?`<span class="chip c-done">${FBL[b.fb]||''}</span>`:''}${b.reminded&&b.status==='booked'?'<span class="chip c-done">알림✓</span>':''}${waitsAt(d,tm).length?`<span class="chip c-wait">대기 ${waitsAt(d,tm).length}</span>`:''}</div>
+        <div class="n">${esc(mname(b.memberId))}<span class="chip c-${b.status}">${ST[b.status]?.l||''}</span>${qd?`<button class="qd" data-act="quickdone" data-id="${b.id}">✅ 완료</button>`:''}${ex}${active(b) && (overlapOf(d, tm, b.id) ? '<span class="chip c-noshow">⚠️ 시간 겹침</span>' : !rawGrid(d).includes(tm) ? '<span class="chip c-late">⚠️ 시간표 밖</span>' : '')}${b.fb?`<span class="chip c-done">${FBL[b.fb]||''}</span>`:''}${b.reminded&&b.status==='booked'?'<span class="chip c-done">알림✓</span>':''}${waitsAt(d,tm).length?`<span class="chip c-wait">대기 ${waitsAt(d,tm).length}</span>`:''}</div>
         <div class="m">${rem}${b.note?' · '+esc(b.note):''}</div></div>`;
     } else {
       const wn = waitsAt(d,tm).length, bl = blockedAt(d, tm);
@@ -888,6 +917,8 @@ const A = {
     const base = (S.settings.daySplit || {})[String(dow(d))] || S.settings.splitTime;
     if (v === base) delete ds[d]; else ds[d] = v;
     const moving = onDate(d).filter(b => b.status === 'booked' && !rawGridWith(d, ds).includes(b.time)).length;
+    const stuck = planDay(d, { dateSplit: ds });
+    if (stuck.length) return toast(`빈 시간이 없어 옮길 수 없는 수업이 있어요: ${stuck.join(', ')} · 먼저 옮기거나 취소해 주세요`);
     const s = { ...S.settings, dateSplit: ds };
     if (await save(()=>S.db.doc('app/settings').set(s))) {
       S.settings = s; render();
