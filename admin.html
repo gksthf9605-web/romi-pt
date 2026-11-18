@@ -74,7 +74,7 @@ nav.tabs button span{display:block;font-size:18px;margin-bottom:2px}
 .lgi{border-bottom:1px solid var(--line);padding:10px 2px}
 .lgi.new{background:var(--acc-soft);border-radius:10px;padding:10px 8px;border-bottom-color:transparent;margin-bottom:2px}
 .lgi b{font-size:14px}.lgi .tm{float:right;font-size:11px;color:var(--mute)}
-.lgi .bd{font-size:13px;color:var(--sub);margin-top:3px;line-height:1.45}
+.lgi .lgb{font-size:13px;color:var(--sub);margin-top:3px;line-height:1.45}
 .wrow .row{margin-top:8px}
 .alert{background:var(--acc-soft);border:1px solid var(--acc);border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:14px}
 .alert button{display:block;width:100%;text-align:left;border:0;background:none;padding:6px 0;color:var(--acc);font-weight:700}
@@ -91,6 +91,8 @@ nav.tabs button span{display:block;font-size:18px;margin-bottom:2px}
 .bk .n{font-weight:700;font-size:15px}
 .bk .qd{margin-left:8px;border:1px solid var(--done);color:var(--done);background:var(--card);border-radius:99px;padding:3px 10px;font-size:12px;font-weight:700;vertical-align:1px}
 .bk .qd:disabled{opacity:.5}
+.bk .qd.ex{border-color:var(--acc);color:var(--acc)}
+.bk .qd.ex.on{background:var(--acc);color:#fff}
 .bk .m{font-size:12px;color:var(--sub);margin-top:2px}
 .bk.s-done{border-left-color:var(--done);opacity:.8}
 .bk.s-noshow{border-left-color:var(--bad)}
@@ -242,13 +244,29 @@ const splitOf = d => { const s = S.settings; return (d && s.dateSplit && s.dateS
 function grid(d){ const out = rawGrid(d); return d ? out.filter(t => !blockedAt(d, t)) : out; }
 function rawGrid(d){
   const s = S.settings, we = s.weekendOn && isWeekend(d);
-  const out = [], open = toMin(we ? s.weekendOpen : s.openTime), close = toMin(we ? s.weekendClose : s.closeTime);
+  const out = [], open = toMin(we ? ((s.dateOpen||{})[d] || s.weekendOpen) : s.openTime), close = toMin(we ? s.weekendClose : s.closeTime);
   const u1 = Math.max(10, Number(s.unit)||60), u2 = Math.max(10, Number(s.unit2)||50);
   const st = splitOf(d);
   const split = s.splitOn ? Math.min(Math.max(toMin(st), open), close) : close;
   for (let m = open; m + u1 <= split; m += u1) out.push(fromMin(m));
-  if (s.splitOn) for (let m = split; m + u2 <= close; m += u2) out.push(fromMin(m));
+  if (s.splitOn) {
+    const ext = ((s.dateExt||{})[d]) || [];
+    let n = 0; for (let m = split; m + u2 <= close; m += u2) n++;
+    for (let i = 0, m = split; i < n; i++) { out.push(fromMin(m)); m += u2 + (ext.includes(i) ? 10 : 0); }
+  }
   return out;
+}
+function withS(over, fn){ const keep = S.settings; S.settings = { ...keep, ...over }; try { return fn(); } finally { S.settings = keep; } }
+function fixedTime(d, t){
+  const g = rawGrid(d);
+  if (!g.length || g.includes(t) || !withS({ dateSplit:{}, dateExt:{}, dateOpen:{} }, () => rawGrid(d)).includes(t)) return t;
+  return g.slice().sort((x,y)=>(Math.abs(toMin(x)-toMin(t)) - Math.abs(toMin(y)-toMin(t))) || (toMin(y)-toMin(x)))[0];
+}
+/* 이 날 50분 수업 중 몇 번째인지 (+10분 버튼용), 아니면 -1 */
+function eveIdx(d, t){
+  const s = S.settings; if (!s.splitOn || (s.weekendOn && isWeekend(d))) return -1;
+  const sp = toMin(splitOf(d));
+  return rawGrid(d).filter(x => toMin(x) >= sp).indexOf(t);
 }
 const blockedList = () => (Array.isArray(S.settings.blockedSlots) ? S.settings.blockedSlots : []).map(x => { const p = String(x).split('|'), k = p[0].split('-'); return { dow:Number(k[0]), time:k[1], label:(p[1]||'').trim() || '회의', hide:p[2]==='1' }; });
 const dateBlockList = () => (Array.isArray(S.settings.dateBlocks) ? S.settings.dateBlocks : []).map((x, i) => { const p = String(x).split('|'), m = p[0].match(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})(?:~(\d{2}:\d{2}))?$/); return m ? { i, raw:x, date:m[1], from:m[2], to:m[3]||'', label:(p[1]||'').trim() || '개인 일정', hide:p[2]==='1' } : null; }).filter(Boolean);
@@ -287,6 +305,14 @@ function parseBulk(txt){
     seen.add(digits);
     return { raw, name, phone, st:'new' };
   });
+}
+async function saveDaySetting(part, msg, moving){
+  const s = { ...S.settings, ...part };
+  if (await save(()=>S.db.doc('app/settings').set(s))) {
+    S.settings = s; render();
+    toast(msg + (moving ? ` · 뒤 수업 ${moving}건 시간이 바뀌어 회원에게 알렸어요` : ''));
+    setTimeout(() => reload().catch(()=>{}), 1500);
+  }
 }
 function rawGridWith(d, ds){ const keep = S.settings.dateSplit; S.settings.dateSplit = ds; try { return rawGrid(d); } finally { S.settings.dateSplit = keep; } }
 async function saveDateBlocks(arr){
@@ -330,7 +356,7 @@ function fixedOn(d){
   for (const f of Object.values(S.fixed)){
     if (Number(f.dow)!==dow(d) || d < (f.startDate||'') || !S.members[f.memberId]) continue;
     if (Object.values(S.bookings).some(b => b.fixedId===f.id && b.fixedDate===d)) continue;
-    const v = { id:`fx_${f.id}_${d}`, virtual:true, fixedId:f.id, fixedDate:d, memberId:f.memberId, date:d, time:f.time, status:'booked', deducted:false, reminded:false, note:'' };
+    const v = { id:`fx_${f.id}_${d}`, virtual:true, fixedId:f.id, fixedDate:d, memberId:f.memberId, date:d, time:fixedTime(d, f.time), status:'booked', deducted:false, reminded:false, note:'' };
     S.vmap[v.id] = v; out.push(v);
   }
   return out;
@@ -436,6 +462,10 @@ function vSchedule(){
     const cur = splitOf(d), own = !!(S.settings.dateSplit || {})[d];
     h += `<div class="splitbar">50분 수업 시작 ${['17:00','18:00'].map(v=>`<button class="${cur===v?'on':''}" data-act="setsplit" data-v="${v}">${v}</button>`).join('')}<span style="font-weight:500">${own?'이 날만 설정됨':'기본값'}</span></div>`;
   }
+  if (S.settings.weekendOn && isWeekend(d) && d >= t) {
+    const cur = (S.settings.dateOpen||{})[d] || S.settings.weekendOpen, own = !!(S.settings.dateOpen||{})[d];
+    h += `<div class="splitbar">시작 ${['10:00','10:30','11:00'].map(v=>`<button class="${cur===v?'on':''}" data-act="setopen" data-v="${v}">${v}</button>`).join('')}<span style="font-weight:500">${own?'이 날만 설정됨':'기본값'}</span></div>`;
+  }
   const dOff = offType(d);
   if (!dOff && notOpen(d)) h += `<div class="note" style="background:var(--acc-soft);color:var(--acc);border-radius:10px;padding:8px 12px;font-size:13px;margin-bottom:8px">회원에게는 <b>${openLabel(d)}</b>에 열려요 · 관리자는 지금 미리 예약할 수 있어요.</div>`;
   if (dOff){
@@ -454,8 +484,11 @@ function vSchedule(){
       const m = S.members[b.memberId];
       const rem = m ? `남은 ${m.remaining??0}회` : '';
       const qd = b.status==='booked' && d <= t;
+      const ei = eveIdx(d, tm), ext = ei >= 0 && (((S.settings.dateExt||{})[d])||[]).includes(ei);
+      const ex = ei >= 0 && b.status==='booked' && !past(tm) ? `<button class="qd ex ${ext?'on':''}" data-act="ext" data-i="${ei}">${ext?'60분 ✓':'+10분'}</button>` : '';
+      const FBL = { good:'😊 좋았어요', hard:'😮‍💨 힘들었어요', pain:'🤕 아픈 곳 있었어요' };
       h += `<div class="bk s-${b.status}" role="button" tabindex="0" data-act="booking" data-id="${b.id}">
-        <div class="n">${esc(mname(b.memberId))}<span class="chip c-${b.status}">${ST[b.status]?.l||''}</span>${qd?`<button class="qd" data-act="quickdone" data-id="${b.id}">✅ 완료</button>`:''}${b.reminded&&b.status==='booked'?'<span class="chip c-done">알림✓</span>':''}${waitsAt(d,tm).length?`<span class="chip c-wait">대기 ${waitsAt(d,tm).length}</span>`:''}</div>
+        <div class="n">${esc(mname(b.memberId))}<span class="chip c-${b.status}">${ST[b.status]?.l||''}</span>${qd?`<button class="qd" data-act="quickdone" data-id="${b.id}">✅ 완료</button>`:''}${ex}${b.fb?`<span class="chip c-done">${FBL[b.fb]||''}</span>`:''}${b.reminded&&b.status==='booked'?'<span class="chip c-done">알림✓</span>':''}${waitsAt(d,tm).length?`<span class="chip c-wait">대기 ${waitsAt(d,tm).length}</span>`:''}</div>
         <div class="m">${rem}${b.note?' · '+esc(b.note):''}</div></div>`;
     } else {
       const wn = waitsAt(d,tm).length, bl = blockedAt(d, tm);
@@ -598,7 +631,7 @@ function logSheet(keep){
   openSheet(`<button class="x" data-act="close">×</button>
     <h3>📬 알림 목록</h3>
     <div class="sub">회원 예약·취소·변경·대기 소식이에요. 최근 100건까지 보여요.</div>
-    ${L.length ? L.map(x => `<div class="lgi ${x.at > seenBefore ? 'new' : ''}"><span class="tm">${agoStr(x.at)}</span><b>${esc(x.title)}</b><div class="bd">${esc(x.body)}</div></div>`).join('')
+    ${L.length ? L.map(x => `<div class="lgi ${x.at > seenBefore ? 'new' : ''}"><span class="tm">${agoStr(x.at)}</span><b>${esc(x.title)}</b><div class="lgb">${esc(x.body)}</div></div>`).join('')
       : '<div class="notice">아직 알림이 없어요.</div>'}`, { kind:'log', seen: seenBefore });
   const top = L.length ? L[0].at : 0;
   if (top > (R.seen||0)) { R.seen = top; logBadge(); API('adminLogSeen', R.tok, top).catch(()=>{}); }
@@ -828,6 +861,25 @@ const A = {
     }
   },
   offs(){ offSheet(S.day); },
+  async setopen(el){
+    const d = S.day, v = el.dataset.v;
+    if (((S.settings.dateOpen||{})[d] || S.settings.weekendOpen) === v) return;
+    const cut = addDays(todayStr(), -1), dop = {};
+    Object.entries(S.settings.dateOpen || {}).forEach(([k, x]) => { if (k >= cut) dop[k] = x; });
+    if (v === S.settings.weekendOpen) delete dop[d]; else dop[d] = v;
+    const moving = withS({ dateOpen: dop }, () => onDate(d).filter(b => b.status==='booked' && !rawGrid(d).includes(b.time)).length);
+    await saveDaySetting({ dateOpen: dop }, `${md(d)}(${DOW[dow(d)]}) ${v} 시작으로 바꿨어요`, moving);
+  },
+  async ext(el){
+    const d = S.day, i = Number(el.dataset.i);
+    const cut = addDays(todayStr(), -1), de = {};
+    Object.entries(S.settings.dateExt || {}).forEach(([k, x]) => { if (k >= cut) de[k] = [...x]; });
+    const cur = de[d] || [], on = cur.includes(i);
+    de[d] = on ? cur.filter(x => x !== i) : [...cur, i].sort((a,b)=>a-b);
+    if (!de[d].length) delete de[d];
+    const moving = withS({ dateExt: de }, () => onDate(d).filter(b => b.status==='booked' && !rawGrid(d).includes(b.time)).length);
+    await saveDaySetting({ dateExt: de }, on ? '60분을 취소하고 원래 시간으로 돌렸어요' : '이 수업을 60분으로 늘렸어요', moving);
+  },
   async setsplit(el){
     const d = S.day, v = el.dataset.v;
     if (splitOf(d) === v) return;

@@ -222,6 +222,10 @@ function render(){
       <div style="display:flex;gap:6px">${PT.Push.state() ? `<button class="btn sm" data-act="pushopen" title="알림 설정">${PT.Push.state()==='granted'?'🔔':'🔕'}</button>` : ''}<button class="btn sm" data-act="install">📲 앱</button><button class="btn sm" data-act="refresh">↻</button></div></div>
     <div class="seg"><button class="${M.tab==='book'?'on':''}" data-act="tab" data-t="book">예약하기</button>
       <button class="${M.tab==='mine'?'on':''}" data-act="tab" data-t="mine">내 예약${alerts?`<span class="badge">${alerts}</span>`:''}</button></div>
+    ${v.fbAsk && !M.fbDone ? `<div class="card" style="border-color:var(--acc);background:var(--acc-soft)"><b>💬 어제 수업 어떠셨나요?</b>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">${[['good','😊 좋았어요'],['hard','😮‍💨 힘들었어요'],['pain','🤕 아픈 곳이 있었어요']].map(([k,l])=>`<button class="btn sm" data-act="fb" data-id="${v.fbAsk.id}" data-v="${k}">${l}</button>`).join('')}</div>
+      <div class="hint" style="margin-top:8px">추가로 피드백 사항이 있으면 카톡으로 남겨 주세요. 다음 수업 때 큰 도움이 돼요!</div></div>` : ''}
+    ${M.fbDone === 1 ? `<div class="card" style="text-align:center">감사합니다! 💜 ${esc(v.trainer)}쌤에게 전달했어요.</div>` : ''}
     ${M.tab==='book' ? vBook() : vMine()}
     <div class="hint" style="margin-top:20px">※ ${esc(v.policy)}<br>${esc(v.trainer)} 트레이너 · <button class="link" data-act="logout">로그아웃</button></div>`;
 }
@@ -330,6 +334,10 @@ function vMine(){
 
 /* ---------- 동작 ---------- */
 const H = {
+  async fb(el){
+    const v = await act('memberFeedback', el.dataset.id, el.dataset.v);
+    if (v) { M.fbDone = 1; render(); setTimeout(() => { M.fbDone = 2; render(); }, 4000); }
+  },
   tab(el){ M.tab = el.dataset.t; render(); window.scrollTo(0,0); },
   day(el){ M.day = el.dataset.d; render(); },
   close(){ closeSheet(); },
