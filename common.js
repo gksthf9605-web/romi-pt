@@ -9,19 +9,17 @@
 
   /* ---------- 선생님 구분: 주소 끝 ?t=아이디 (없으면 로미) ---------- */
   function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
-  var isAdm = /admin\.html/i.test(location.pathname);
+  var isAdm = /admin[^/]*\.html/i.test(location.pathname || '');
   var qt = (location.search.match(/[?&]t=([^&#]*)/) || [])[1];
   var TK = isAdm ? 'pt_ta' : 'pt_t';
-  var T0 = qt ? decodeURIComponent(qt).toLowerCase() : (ls(TK) || 'romi');
-  if (qt) ls(TK, T0);
+  // 선생님 전용 페이지(doyoung.html 등)는 페이지 안에 PT_T가 박혀 있어요
+  var T0 = window.PT_T || (qt ? decodeURIComponent(qt).toLowerCase() : (ls(TK) || 'romi'));
+  if (window.PT_T || qt) ls(TK, T0);
   PT.HOME_T = T0;              // 이 기기가 원래 속한 선생님
   PT.T = T0;                   // 지금 보고 있는 선생님 (총괄은 바꿀 수 있어요)
   PT.sfx = T0 === 'romi' ? '' : '@' + T0;   // 로그인 저장 이름 구분
   PT.setT = function (t) { PT.T = t || T0; };
-  if (T0 !== 'romi') {
-    var mf = document.querySelector('link[rel="manifest"]');
-    if (mf) mf.setAttribute('href', (isAdm ? 'manifest-admin-' : 'manifest-') + T0 + '.webmanifest');
-  }
+
 
   /* ---------- 통신 ---------- */
   PT.errMsg = function (e) { return String((e && e.message) || e || '').replace(/^(Exception|Error|ScriptError|TypeError):\s*/, '').trim(); };

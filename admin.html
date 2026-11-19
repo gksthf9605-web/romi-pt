@@ -1198,7 +1198,7 @@ document.addEventListener('input', e => { if (e.target.id === 'mq') drawMList(e.
 const R = { data:{}, subs:[], tok:null, url:'', loaded:false, timer:null };
 const API = PT.API;
 const errMsg = PT.errMsg;
-const adminLink = () => /github\.io/.test(R.url || '') ? (R.url || '').replace(/[?#].*$/, '').replace(/[^/]*$/, '') + 'admin.html' + (PT.T !== 'romi' ? '?t=' + encodeURIComponent(PT.T) : '') : (R.url || '') + '?admin=1';
+const adminLink = () => /github\.io/.test(R.url || '') ? (R.url || '').replace(/[?#].*$/, '').replace(/[^/]*$/, '') + (PT.T !== 'romi' ? 'admin-' + PT.T + '.html' : 'admin.html') : (R.url || '') + '?admin=1';
 const rid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
 const fireAll = () => R.subs.forEach(s => { try { s(); } catch(e){ console.error(e); } });
 function cmp(a, op, v){ return op==='>=' ? a>=v : op==='>' ? a>v : op==='<=' ? a<=v : op==='<' ? a<v : op==='==' ? a===v : op==='!=' ? a!==v : true; }

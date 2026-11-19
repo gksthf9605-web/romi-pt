@@ -1,8 +1,8 @@
 {
-  "id": "./?t=doyoung",
+  "id": "./doyoung.html",
   "name": "어메이징 석계 PT 예약",
   "short_name": "어메이징 석계 PT 예약",
-  "start_url": "./?t=doyoung",
+  "start_url": "./doyoung.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f7f5fc",

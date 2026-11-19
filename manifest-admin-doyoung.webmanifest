@@ -1,8 +1,8 @@
 {
-  "id": "./admin.html?t=doyoung",
+  "id": "./admin-doyoung.html",
   "name": "어메이징 석계 PT 관리 (도영)",
   "short_name": "PT 관리",
-  "start_url": "./admin.html?t=doyoung",
+  "start_url": "./admin-doyoung.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f7f5fc",
