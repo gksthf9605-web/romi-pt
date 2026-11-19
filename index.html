@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>로미 PT</title>
+<title>어메이징 석계 PT 예약</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="theme-color" content="#7c3aed">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="로미 PT">
+<meta name="apple-mobile-web-app-title" content="어메이징 석계 PT 예약">
 <script src="firebase-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
@@ -156,7 +156,7 @@ document.addEventListener('click', e => {
   cells.forEach(x => x.classList.toggle('on', !allOn));
 });
 const M = { tok:null, v:null, tab:'book', day:null, moving:null, step:'phone', phone:'', name:'', err:'', busy:false };
-try { M.tok = localStorage.getItem('pt_m'); } catch(e){}
+try { M.tok = localStorage.getItem('pt_m'+PT.sfx); } catch(e){}
 
 const API = PT.API;
 let tT;
@@ -208,7 +208,7 @@ function setView(v){
 }
 function logout(msg){
   if (M.tok) API('memberLogout', M.tok).catch(()=>{});
-  try { localStorage.removeItem('pt_m'); } catch(e){}
+  try { localStorage.removeItem('pt_m'+PT.sfx); } catch(e){}
   M.tok = null; M.v = null; M.step = 'phone'; PT.Push.setLoggedIn(false); M.err = msg || ''; M.moving = null; closeSheet(); render();
 }
 
@@ -218,10 +218,11 @@ function render(){
   if (!M.tok || !M.v) { app.innerHTML = vLogin(); return; }
   const v = M.v, alerts = v.swapsIn.length + v.waits.filter(w=>w.free).length;
   app.innerHTML = `<div class="top"><div><h1>${esc(v.me.name)} 회원님</h1>
-      <div class="sub">남은 PT ${v.me.remaining}회 · 더 예약할 수 있는 횟수 ${Math.max(0, v.me.left)}회</div></div>
+      <div class="sub">${esc(v.trainer)}쌤 · 남은 PT ${v.me.remaining}회 · 더 예약할 수 있는 횟수 ${Math.max(0, v.me.left)}회</div></div>
       <div style="display:flex;gap:6px">${PT.Push.state() ? `<button class="btn sm" data-act="pushopen" title="알림 설정">${PT.Push.state()==='granted'?'🔔':'🔕'}</button>` : ''}<button class="btn sm" data-act="install">📲 앱</button><button class="btn sm" data-act="refresh">↻</button></div></div>
     <div class="seg"><button class="${M.tab==='book'?'on':''}" data-act="tab" data-t="book">예약하기</button>
       <button class="${M.tab==='mine'?'on':''}" data-act="tab" data-t="mine">내 예약${alerts?`<span class="badge">${alerts}</span>`:''}</button></div>
+    ${v.maint ? `<div class="banner" style="margin:10px 0">🔧 지금 앱 점검 중이에요. 예약·취소·변경은 잠시 후(약 1시간 안에) 다시 해 주세요.</div>` : ''}
     ${v.fbAsk && !M.fbDone ? `<div class="card" style="border-color:var(--acc);background:var(--acc-soft)"><b>💬 어제 수업 어떠셨나요?</b>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">${[['good','😊 좋았어요'],['hard','😮‍💨 힘들었어요'],['pain','🤕 아픈 곳이 있었어요']].map(([k,l])=>`<button class="btn sm" data-act="fb" data-id="${v.fbAsk.id}" data-v="${k}">${l}</button>`).join('')}</div>
       <div class="hint" style="margin-top:8px">추가로 피드백 사항이 있으면 카톡으로 남겨 주세요. 다음 수업 때 큰 도움이 돼요!</div></div>` : ''}
@@ -252,7 +253,7 @@ function vLogin(){
       <button class="link" data-act="back">전화번호 다시 입력</button>`;
   if (s === 'unknown') body = `<div class="banner" style="margin-top:12px">등록되지 않은 번호예요. 트레이너에게 등록된 번호가 맞는지 확인해 주세요.</div><button class="btn block" data-act="back">다시 입력</button>`;
   if (s === 'needcode') body = `<div class="banner" style="margin-top:12px">아직 가입 전이에요. 트레이너가 문자로 보낸 <b>가입 링크</b>로 들어와 주세요. 문자가 없으면 트레이너에게 다시 요청해 주세요.</div><button class="btn block" data-act="back">다시 입력</button>`;
-  return `<div class="top"><div><h1>PT 예약</h1><div class="sub">${s==='setup'?'처음 한 번만 가입하면 돼요':'로그인'}</div></div><button class="btn sm" data-act="install">📲 앱처럼 쓰기</button></div>
+  return `<div class="top"><div><h1>${M.tname ? esc(M.tname)+'쌤 ' : ''}PT 예약</h1><div class="sub">${s==='setup'?'처음 한 번만 가입하면 돼요':'로그인'}</div></div><button class="btn sm" data-act="install">📲 앱처럼 쓰기</button></div>
     <div class="card" style="margin-top:14px">${body}${M.err?`<div class="banner" style="margin:12px 0 0">${esc(M.err)}</div>`:''}</div>`;
 }
 
@@ -456,7 +457,7 @@ document.addEventListener('keydown', e => {
 });
 
 async function afterLogin(){
-  try { localStorage.setItem('pt_m', M.tok); } catch(e){}
+  try { localStorage.setItem('pt_m'+PT.sfx, M.tok); } catch(e){}
   M.err = ''; M.step = 'phone';
   const v = await act('memberView'); if (!v) render();
 }
@@ -465,6 +466,7 @@ setInterval(() => { if (document.visibilityState === 'visible') bgRefresh(); }, 
 
 (async () => {
   if (PT.escaping) return;  // 카톡 등에서 열렸으면 브라우저로 넘어갈 때까지 대기
+  if (PT.T !== 'romi') API('publicInfo').then(r => { M.tname = r && r.name; if (!M.v) render(); }).catch(() => {});
   if (M.tok) { const v = await act('memberView'); if (v) return; }
   render();
 })();

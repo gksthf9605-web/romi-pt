@@ -1,0 +1,24 @@
+{
+  "id": "./?t=doyoung",
+  "name": "어메이징 석계 PT 예약",
+  "short_name": "어메이징 석계 PT 예약",
+  "start_url": "./?t=doyoung",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f5fc",
+  "theme_color": "#7c3aed",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

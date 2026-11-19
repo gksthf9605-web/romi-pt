@@ -1,17 +1,34 @@
-/* 로미 PT 공통 기능: 구글 웹앱 통신 · 카톡에서 브라우저로 열기 · 푸시 알림 (고칠 필요 없어요) */
+/* 어메이징 석계 PT 예약 공통 기능: 구글 웹앱 통신 · 카톡에서 브라우저로 열기 · 푸시 알림 (고칠 필요 없어요) */
 (function () {
   // 구글 웹앱 주소 (/exec 로 끝나는 주소)
-  var APP_URL = 'https://script.google.com/macros/s/AKfycbyPg7jqfPL-R-CRsE4_AMDhDUcfDrDmjpjyAD_bVsJeiiYXr3EQwByy2azq8ZqtxKda/exec';
+  var APP_URL = 'https://script.google.com/macros/s/AKfycbztc2wzEjukF7GUAPorKkB2xyAdeQmBn0L6V8yzPAlxGUqGyXliwtaV76P1XLW-lnlOjw/exec';
 
   var PT = window.PT = {};
   PT.APP_URL = APP_URL;
+  PT.NAME = '어메이징 석계 PT 예약';
+
+  /* ---------- 선생님 구분: 주소 끝 ?t=아이디 (없으면 로미) ---------- */
+  function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
+  var isAdm = /admin\.html/i.test(location.pathname);
+  var qt = (location.search.match(/[?&]t=([^&#]*)/) || [])[1];
+  var TK = isAdm ? 'pt_ta' : 'pt_t';
+  var T0 = qt ? decodeURIComponent(qt).toLowerCase() : (ls(TK) || 'romi');
+  if (qt) ls(TK, T0);
+  PT.HOME_T = T0;              // 이 기기가 원래 속한 선생님
+  PT.T = T0;                   // 지금 보고 있는 선생님 (총괄은 바꿀 수 있어요)
+  PT.sfx = T0 === 'romi' ? '' : '@' + T0;   // 로그인 저장 이름 구분
+  PT.setT = function (t) { PT.T = t || T0; };
+  if (T0 !== 'romi') {
+    var mf = document.querySelector('link[rel="manifest"]');
+    if (mf) mf.setAttribute('href', (isAdm ? 'manifest-admin-' : 'manifest-') + T0 + '.webmanifest');
+  }
 
   /* ---------- 통신 ---------- */
   PT.errMsg = function (e) { return String((e && e.message) || e || '').replace(/^(Exception|Error|ScriptError|TypeError):\s*/, '').trim(); };
   PT.API = function (fn) {
     var args = Array.prototype.slice.call(arguments, 1);
     var ctrl = window.AbortController ? new AbortController() : null, timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 30000) : null;
-    return fetch(APP_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn: fn, args: args }), signal: ctrl ? ctrl.signal : undefined })
+    return fetch(APP_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn: fn, args: args, t: PT.T }), signal: ctrl ? ctrl.signal : undefined })
       .catch(function (e) { throw new Error(e && e.name === 'AbortError' ? '응답이 너무 늦어요. 잠시 후 다시 시도해 주세요.' : '인터넷 연결을 확인하고 다시 시도해 주세요.'); })
       .finally(function () { if (timer) clearTimeout(timer); })
       .then(function (r) { return r.text(); })
@@ -79,7 +96,7 @@
     messaging = firebase.messaging();
     messaging.onMessage(function (p) {
       var n = (p && p.notification) || {};
-      sw().then(function (r) { r.showNotification(n.title || '로미 PT', { body: n.body || '', icon: 'icon-192.png' }); });
+      sw().then(function (r) { r.showNotification(n.title || PT.NAME, { body: n.body || '', icon: 'icon-192.png' }); });
     });
   }
   function save() {
@@ -105,20 +122,20 @@
   function autoAsk() {
     var s = state();
     if (!logged || !s) return;
-    if (s === 'unsupported') { if (isIOS && !standalone && !snoozed()) showBar('📲 아이폰은 <b>홈 화면에 추가한 \'로미 PT\' 아이콘</b>으로 열어야 알림을 받을 수 있어요.<div class="r"><button class="n" data-k="snooze">닫기</button></div>'); return; }
+    if (s === 'unsupported') { if (isIOS && !standalone && !snoozed()) showBar('📲 아이폰은 <b>홈 화면에 추가한 \'' + PT.NAME + '\' 아이콘</b>으로 열어야 알림을 받을 수 있어요.<div class="r"><button class="n" data-k="snooze">닫기</button></div>'); return; }
     if (s === 'default' && !snoozed()) showBar('🔔 <b>알림을 켜 주세요</b><br>변경 요청, 대기 자리 소식을 바로 알려 드려요.<div class="r"><button class="n" data-k="snooze">나중에</button><button class="y" data-k="on">알림 켜기</button></div>');
   }
   function openPanel() {
     var s = state();
     if (!s) return showBar('알림 기능이 아직 준비 중이에요.<div class="r">' + CLOSE + '</div>');
     if (s === 'unsupported') {
-      if (isIOS && !standalone) return showBar('📲 아이폰은 <b>홈 화면에 추가한 \'로미 PT\' 아이콘</b>으로 열어야 알림을 켤 수 있어요.<br>사파리 공유 버튼 → \'홈 화면에 추가\' 후 그 아이콘으로 열어 주세요. (iOS 16.4 이상)<div class="r">' + CLOSE + '</div>');
+      if (isIOS && !standalone) return showBar('📲 아이폰은 <b>홈 화면에 추가한 \'' + PT.NAME + '\' 아이콘</b>으로 열어야 알림을 켤 수 있어요.<br>사파리 공유 버튼 → \'홈 화면에 추가\' 후 그 아이콘으로 열어 주세요. (iOS 16.4 이상)<div class="r">' + CLOSE + '</div>');
       return showBar('이 브라우저는 알림을 지원하지 않아요. <b>크롬</b>으로 열어 주세요.<div class="r">' + CLOSE + '</div>');
     }
     if (s === 'default') return showBar('🔔 <b>알림 켜기</b><br>변경 요청, 대기 자리 소식을 바로 알려 드려요.<div class="r">' + CLOSE + '<button class="y" data-k="on">알림 켜기</button></div>');
     if (s === 'denied') {
-      var how = isIOS ? '아이폰 <b>설정 → 알림 → 로미 PT → 알림 허용</b>을 켜 주세요.'
-        : '홈 화면의 <b>로미 PT 아이콘을 길게 누르기 → ⓘ 앱 정보 → 알림 → 허용</b>을 켜 주세요.';
+      var how = isIOS ? '아이폰 <b>설정 → 알림 → ' + PT.NAME + ' → 알림 허용</b>을 켜 주세요.'
+        : '홈 화면의 <b>' + PT.NAME + ' 아이콘을 길게 누르기 → ⓘ 앱 정보 → 알림 → 허용</b>을 켜 주세요.';
       return showBar('🔕 <b>알림이 꺼져 있어요</b><br>' + how + '<div class="r">' + CLOSE + '<button class="y" data-k="recheck">다시 확인</button></div>');
     }
     fetchToken();
