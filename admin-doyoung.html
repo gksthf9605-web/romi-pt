@@ -453,7 +453,8 @@ function render(){
 }
 function render0(){
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab===S.tab));
-  $('#htitle').textContent = `${S.settings.trainerName||''} PT 스케줄`.trim();
+  const tn = R.loaded ? S.settings.trainerName : (window.PT && PT.T !== 'romi' ? (R.tname || '') : S.settings.trainerName);
+  $('#htitle').textContent = `${tn||''} PT 스케줄`.trim();
   const t = todayStr(), other = R.me && R.me.master && window.PT && PT.T !== PT.HOME_T;
   $('#hsub').textContent = `오늘 ${md(t)}(${DOW[dow(t)]}) · ${other ? '총괄 관리자로 보는 중' : '관리자'}`;
   const v = $('#view');
@@ -1321,6 +1322,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
   render();
   let tok = null; try { tok = localStorage.getItem('pt_admin' + (window.PT ? PT.sfx : '')); } catch(e){}
   if (tok) { R.tok = tok; try { await startData(); return; } catch(e){ if (errMsg(e) !== 'LOGIN') { S.err = '연결하지 못했어요: ' + errMsg(e); render(); return; } } }
+  if (window.PT && PT.T !== 'romi') API('publicInfo').then(r => { R.tname = r && r.name; render(); }).catch(()=>{});
   try { const st = await API('adminStatus'); S.login = { hasPw: st.hasPw, err: '' }; }
   catch(e){ S.err = errMsg(e); }
   render();
