@@ -97,11 +97,13 @@ nav.tabs button span{display:block;font-size:18px;margin-bottom:2px}
 .bk .qd.ex.on{background:var(--acc);color:#fff}
 .bk .m{font-size:12px;color:var(--sub);margin-top:2px}
 .bk.s-done{border-left-color:var(--done);opacity:.8}
+.bk.s-svc{border-left-color:#ec4899;opacity:.85}
 .bk.s-noshow{border-left-color:var(--bad)}
 .bk.s-late{border-left-color:var(--warn)}
 .chip{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:99px;margin-left:6px;vertical-align:2px}
 .c-booked{background:var(--acc-soft);color:var(--acc)}
 .c-done{background:var(--done-soft);color:var(--done)}
+.c-svc{background:#fce7f3;color:#be185d}
 .c-noshow{background:var(--bad-soft);color:var(--bad)}
 .c-late{background:var(--warn-soft);color:var(--warn)}
 .c-canceled{background:var(--done-soft);color:var(--mute)}
@@ -230,7 +232,7 @@ const DEFAULTS = {
   shareTail:'원하시는 시간을 답장 주시면 예약해 드릴게요!'
 };
 const ST = {
-  booked:{l:'예약'}, done:{l:'완료'}, noshow:{l:'노쇼'}, late:{l:'당일취소'}, canceled:{l:'취소'}
+  booked:{l:'예약'}, done:{l:'완료'}, svc:{l:'서비스'}, noshow:{l:'노쇼'}, late:{l:'당일취소'}, canceled:{l:'취소'}
 };
 
 const S = {
@@ -567,7 +569,7 @@ function vRemind(){
 }
 
 const MSORT = [['name','이름 가나다순'],['name_r','이름 역순'],['rem_d','남은 횟수 많은 순'],['rem_a','남은 횟수 적은 순'],['last','오래 안 온 순'],['new','최근 등록 순']];
-function lastVisit(id){ const t = todayStr(); return Object.values(S.bookings).filter(b => b.memberId===id && b.status==='done' && b.date<=t).reduce((x,b)=>b.date>x?b.date:x, ''); }
+function lastVisit(id){ const t = todayStr(); return Object.values(S.bookings).filter(b => b.memberId===id && (b.status==='done' || b.status==='svc') && b.date<=t).reduce((x,b)=>b.date>x?b.date:x, ''); }
 function sortMembers(ms){
   const nm = (a,b)=>String(a.name).localeCompare(String(b.name),'ko'), r = m => Number(m.remaining)||0;
   const f = { name:nm, name_r:(a,b)=>nm(b,a), rem_d:(a,b)=>r(b)-r(a)||nm(a,b), rem_a:(a,b)=>r(a)-r(b)||nm(a,b),
@@ -732,7 +734,7 @@ function bookedWhen(b){
 function bookingSheet(id){
   const b = S.bookings[id]; if (!b) return;
   const m = S.members[b.memberId] || {};
-  const stBtns = [['done','✅ 수업 완료'],['noshow','🚫 노쇼'],['late','⚠️ 당일 취소'],['canceled','↩︎ 취소 (차감 없음)']]
+  const stBtns = [['done','✅ 수업 완료'],['svc','🎁 서비스 수업 (차감 없음)'],['noshow','🚫 노쇼'],['late','⚠️ 당일 취소'],['canceled','↩︎ 취소 (차감 없음)']]
     .filter(([s])=>s!==b.status)
     .map(([s,l])=>`<button class="btn ${s==='noshow'?'bad':s==='late'?'warn':''}" data-act="status" data-st="${s}">${l}</button>`).join('');
   const msg = fill(S.settings.remindTpl, b);
