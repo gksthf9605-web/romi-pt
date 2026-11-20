@@ -13,8 +13,8 @@
   var qt = (location.search.match(/[?&]t=([^&#]*)/) || [])[1];
   var TK = isAdm ? 'pt_ta' : 'pt_t';
   // 선생님 전용 페이지(doyoung.html 등)는 페이지 안에 PT_T가 박혀 있어요
-  var T0 = window.PT_T || (qt ? decodeURIComponent(qt).toLowerCase() : (ls(TK) || 'romi'));
-  if (window.PT_T || qt) ls(TK, T0);
+  // 기억해 둔 값은 쓰지 않아요: 페이지 자체(admin.html=로미, admin-doyoung.html=도영)로만 정해져요
+  var T0 = window.PT_T || (qt ? decodeURIComponent(qt).toLowerCase() : 'romi');
   PT.HOME_T = T0;              // 이 기기가 원래 속한 선생님
   PT.T = T0;                   // 지금 보고 있는 선생님 (총괄은 바꿀 수 있어요)
   PT.sfx = T0 === 'romi' ? '' : '@' + T0;   // 로그인 저장 이름 구분
@@ -144,11 +144,21 @@
     var k = b.dataset.k;
     if (k === 'on') {
       sw();
+      var done = false;
+      // 크롬이 허용 창을 조용히 막으면 아무 일도 안 일어나요 → 4초 뒤 직접 켜는 방법 안내
+      var manual = function () {
+        var how = isIOS ? '아이폰 <b>설정 → 알림 → ' + PT.NAME + '</b>에서 알림 허용을 켜 주세요.'
+          : '홈 화면의 앱 아이콘을 <b>길게 눌러 → ⓘ 앱 정보 → 알림 → 허용</b>으로 켜 주세요.<br>(크롬에서 열었다면 주소창 왼쪽 <b>자물쇠/설정 아이콘 → 권한 → 알림 허용</b>)';
+        showBar('⚠️ 휴대폰이 알림 허용 창을 막고 있어요.<br>' + how + '<br>켠 다음 앱으로 돌아오면 바로 적용돼요.<div class="r">' + CLOSE + '<button class="y" data-k="recheck">켰어요</button></div>');
+      };
+      var timer = setTimeout(function () { if (!done) manual(); }, 4000);
       Notification.requestPermission().then(function (p) {
+        done = true; clearTimeout(timer);
         if (p === 'granted') { fetchToken(); showBar('🔔 <b>알림이 켜졌어요!</b><div class="r">' + CLOSE + '</div>'); }
+        else if (p === 'default') manual();
         else hideBar();
         emit();
-      });
+      }).catch(function () { done = true; clearTimeout(timer); manual(); });
     } else if (k === 'snooze') { store('pt_snooze', String(Date.now())); hideBar(); }
     else if (k === 'recheck') { emit(); openPanel(); }
     else hideBar();
