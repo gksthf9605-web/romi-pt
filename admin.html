@@ -526,8 +526,9 @@ function vSchedule(){
       const ended = d < t || (d===t && toMin(tm) + durAt(d, tm) <= nowMin());
       const ex = ei >= 0 && b.status==='booked' && !ended ? `<button class="qd ex ${ext?'on':''}" data-act="ext" data-i="${ei}">${ext?'60분 ✓':'+10분'}</button>` : '';
       const FBL = { good:'😊 좋았어요', hard:'😮‍💨 힘들었어요', pain:'🤕 아픈 곳 있었어요' };
+      const CDL = { good:'😊 컨디션 좋음', tired:'😪 피곤함', pain:'🤕 아픈 곳 있음' };
       h += `<div class="bk s-${b.status}" role="button" tabindex="0" data-act="booking" data-id="${b.id}">
-        <div class="n">${esc(mname(b.memberId))}<span class="chip c-${b.status}">${ST[b.status]?.l||''}</span>${qd?`<button class="qd" data-act="quickdone" data-id="${b.id}">✅ 완료</button>`:''}${ex}${active(b) && (overlapOf(d, tm, b.id) ? '<span class="chip c-noshow">⚠️ 시간 겹침</span>' : !rawGrid(d).includes(tm) ? '<span class="chip c-late">⚠️ 시간표 밖</span>' : '')}${b.fb?`<span class="chip c-done">${FBL[b.fb]||''}</span>`:''}${b.reminded&&b.status==='booked'?'<span class="chip c-done">알림✓</span>':''}${waitsAt(d,tm).length?`<span class="chip c-wait">대기 ${waitsAt(d,tm).length}</span>`:''}</div>
+        <div class="n">${esc(mname(b.memberId))}<span class="chip c-${b.status}">${ST[b.status]?.l||''}</span>${qd?`<button class="qd" data-act="quickdone" data-id="${b.id}">✅ 완료</button>`:''}${ex}${active(b) && (overlapOf(d, tm, b.id) ? '<span class="chip c-noshow">⚠️ 시간 겹침</span>' : !rawGrid(d).includes(tm) ? '<span class="chip c-late">⚠️ 시간표 밖</span>' : '')}${b.fb?`<span class="chip c-done">${FBL[b.fb]||''}</span>`:''}${b.cond && b.status==='booked'?`<span class="chip ${b.cond==='pain'?'c-noshow':b.cond==='tired'?'c-late':'c-done'}">${CDL[b.cond]||''}</span>`:''}${b.reminded&&b.status==='booked'?'<span class="chip c-done">알림✓</span>':''}${waitsAt(d,tm).length?`<span class="chip c-wait">대기 ${waitsAt(d,tm).length}</span>`:''}</div>
         <div class="m">${rem}${b.note?' · '+esc(b.note):''}${b.virtual?' · 매주 고정':''}</div></div>`;
     } h += `</div>`; } else {
       const wn = waitsAt(d,tm).length, bl = blockedAt(d, tm);

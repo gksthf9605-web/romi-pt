@@ -224,6 +224,10 @@ function render(){
     <div class="seg"><button class="${M.tab==='book'?'on':''}" data-act="tab" data-t="book">예약하기</button>
       <button class="${M.tab==='mine'?'on':''}" data-act="tab" data-t="mine">내 예약${alerts?`<span class="badge">${alerts}</span>`:''}</button></div>
     ${v.maint ? `<div class="banner" style="margin:10px 0">🔧 지금 앱 점검 중이에요. 예약·취소·변경은 잠시 후(약 1시간 안에) 다시 해 주세요.</div>` : ''}
+    ${v.condAsk && !M.cdDone ? `<div class="card" style="border-color:var(--acc);background:var(--acc-soft)"><b>💪 오늘 ${esc(v.condAsk.time)} 수업 전, 컨디션은 어떠세요?</b>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">${[['good','😊 좋아요'],['tired','😪 피곤해요'],['pain','🤕 아픈 곳이 있어요']].map(([k,l])=>`<button class="btn sm" data-act="cond" data-id="${v.condAsk.id}" data-v="${k}">${l}</button>`).join('')}</div>
+      <div class="hint" style="margin-top:8px">아픈 곳이 있으면 어디가 어떤지 카톡으로도 알려 주세요. 오늘 수업에 맞춰 준비할게요!</div></div>` : ''}
+    ${M.cdDone === 1 ? `<div class="card" style="text-align:center">고마워요! 💜 ${esc(v.trainer)}쌤에게 전달했어요. 이따 만나요!</div>` : ''}
     ${v.fbAsk && !M.fbDone ? `<div class="card" style="border-color:var(--acc);background:var(--acc-soft)"><b>💬 어제 수업 어떠셨나요?</b>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">${[['good','😊 좋았어요'],['hard','😮‍💨 힘들었어요'],['pain','🤕 아픈 곳이 있었어요']].map(([k,l])=>`<button class="btn sm" data-act="fb" data-id="${v.fbAsk.id}" data-v="${k}">${l}</button>`).join('')}</div>
       <div class="hint" style="margin-top:8px">추가로 피드백 사항이 있으면 카톡으로 남겨 주세요. 다음 수업 때 큰 도움이 돼요!</div></div>` : ''}
@@ -336,6 +340,10 @@ function vMine(){
 
 /* ---------- 동작 ---------- */
 const H = {
+  async cond(el){
+    const v = await act('memberCondition', el.dataset.id, el.dataset.v);
+    if (v) { M.cdDone = 1; render(); setTimeout(() => { M.cdDone = 2; render(); }, 4000); }
+  },
   async fb(el){
     const v = await act('memberFeedback', el.dataset.id, el.dataset.v);
     if (v) { M.fbDone = 1; render(); setTimeout(() => { M.fbDone = 2; render(); }, 4000); }
