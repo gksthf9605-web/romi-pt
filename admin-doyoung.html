@@ -453,7 +453,7 @@ function render(){
 }
 function render0(){
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab===S.tab));
-  const tn = R.loaded ? S.settings.trainerName : (window.PT && PT.T !== 'romi' ? (R.tname || '') : S.settings.trainerName);
+  const tn = R.loaded ? S.settings.trainerName : (window.PT && PT.T && PT.T !== 'romi' ? (R.tname || '') : (window.PT && !PT.T ? '' : S.settings.trainerName));
   $('#htitle').textContent = `${tn||''} PT 스케줄`.trim();
   const t = todayStr(), other = R.me && R.me.master && window.PT && PT.T !== PT.HOME_T;
   $('#hsub').textContent = `오늘 ${md(t)}(${DOW[dow(t)]}) · ${other ? '총괄 관리자로 보는 중' : '관리자'}`;
@@ -618,7 +618,7 @@ function trainerCard(){
     <div class="row"><input class="i" id="nt_name" placeholder="이름 (예: 도영)"><input class="i" id="nt_id" placeholder="영문 아이디 (예: doyoung)" autocapitalize="off"></div>
     <input class="i" id="nt_pw" placeholder="그 선생님 관리자 비밀번호 (4자 이상)" style="margin-top:8px">
     <button class="btn pri block" style="margin-top:8px" data-act="tadd">추가하기</button>
-    <div class="hint">시간표는 로미쌤 설정을 그대로 복사해서 시작해요. 그 선생님이 설정에서 바꾸면 돼요.<br>⚠️ 새 선생님은 앱 설치용 파일이 하나 필요해요. 추가한 뒤 Claude에게 "○○쌤 설치 파일 만들어 줘"라고 해 주세요.</div></div>`;
+    <div class="hint">시간표는 로미쌤 설정을 그대로 복사해서 시작해요. 그 선생님이 설정에서 바꾸면 돼요.<br>링크는 모든 선생님이 같아요. 관리자는 <b>비밀번호</b>로, 회원은 <b>전화번호</b>로 자동으로 자기 선생님 화면에 들어가요.</div></div>`;
 }
 async function loadTrainers(){
   try { S.tlist = await API('adminTrainers', R.tok); } catch(e){ S.tlist = []; toast('선생님 목록을 못 불러왔어요: ' + errMsg(e)); }
@@ -1133,6 +1133,8 @@ const A = {
   pushopen(){ PT.Push.openPanel(); },
   async login(){
     const pw = $('#lg_pw').value; if (!pw) return;
+    const sel = $('#lg_t'); if (window.PT) PT.loginT = sel ? sel.value : null;
+    if (sel) { S.lastT = sel.value; try { localStorage.setItem('pt_lastT', sel.value); } catch(e){} }
     try { R.tok = await API('adminLogin', pw); try{ localStorage.setItem('pt_admin' + (window.PT ? PT.sfx : ''), R.tok); }catch(e){} S.login = null; render(); await startData(); }
     catch(e){ if (S.login) { S.login.err = errMsg(e); render(); } }
   },
@@ -1268,17 +1270,26 @@ async function switchT(id){
 }
 function doLogout(msg){
   try { localStorage.removeItem('pt_admin' + (window.PT ? PT.sfx : '')); } catch(e){}
+  if (window.PT) PT.forget();
   R.tok = null; R.loaded = false; R.subs = []; clearInterval(R.timer); PT.Push.setLoggedIn(false);
   S.db = null; S.loaded = false; S.got = { m:false, b:false }; closeSheet();
   S.login = { hasPw: true, err: msg }; render();
   API('adminStatus').then(st => { S.login = { hasPw: st.hasPw, err: msg }; render(); }).catch(()=>{});
+  loadPtr();
+}
+/* 로그인 화면 선생님 목록 (전용 주소면 고를 필요 없음) */
+function loadPtr(){
+  if (!window.PT || PT.FIXED) return;
+  try { S.lastT = localStorage.getItem('pt_lastT') || 'romi'; } catch(e){ S.lastT = 'romi'; }
+  API('publicTrainers').then(l => { S.ptr = l || []; if (S.login) render(); }).catch(()=>{});
 }
 function vLogin(){
   const L = S.login;
   return `<div class="card" style="margin-top:20px">
     <h3 style="margin:0 0 6px">${L.hasPw ? '관리자 로그인' : '관리자 비밀번호 만들기'}</h3>
     <div class="hint">${L.hasPw ? '' : '처음 한 번만 만들어요. 4자 이상, 잊지 않게 적어 두세요.'}</div>
-    <input class="i" type="password" id="lg_pw" placeholder="비밀번호" style="margin-top:12px">
+    ${L.hasPw && S.ptr && S.ptr.length > 1 ? `<select class="i" id="lg_t" style="margin-top:12px">${S.ptr.map(x => `<option value="${esc(x.id)}" ${x.id===S.lastT?'selected':''}>${esc(x.name)}쌤</option>`).join('')}</select>` : ''}
+    <input class="i" type="password" id="lg_pw" placeholder="비밀번호" style="margin-top:${L.hasPw && S.ptr && S.ptr.length > 1 ? 8 : 12}px">
     ${L.hasPw ? '' : '<input class="i" type="password" id="lg_pw2" placeholder="한 번 더 입력" style="margin-top:8px">'}
     <button class="btn pri block" style="margin-top:12px" data-act="${L.hasPw ? 'login' : 'setup'}">${L.hasPw ? '로그인' : '만들고 시작하기'}</button>
     ${L.err ? `<div class="banner" style="margin-top:10px">${esc(L.err)}</div>` : ''}
@@ -1322,7 +1333,8 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
   render();
   let tok = null; try { tok = localStorage.getItem('pt_admin' + (window.PT ? PT.sfx : '')); } catch(e){}
   if (tok) { R.tok = tok; try { await startData(); return; } catch(e){ if (errMsg(e) !== 'LOGIN') { S.err = '연결하지 못했어요: ' + errMsg(e); render(); return; } } }
-  if (window.PT && PT.T !== 'romi') API('publicInfo').then(r => { R.tname = r && r.name; render(); }).catch(()=>{});
+  if (window.PT && PT.T && PT.T !== 'romi') API('publicInfo').then(r => { R.tname = r && r.name; render(); }).catch(()=>{});
+  loadPtr();
   try { const st = await API('adminStatus'); S.login = { hasPw: st.hasPw, err: '' }; }
   catch(e){ S.err = errMsg(e); }
   render();

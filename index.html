@@ -209,6 +209,7 @@ function setView(v){
 function logout(msg){
   if (M.tok) API('memberLogout', M.tok).catch(()=>{});
   try { localStorage.removeItem('pt_m'+PT.sfx); } catch(e){}
+  PT.forget();
   M.tok = null; M.v = null; M.step = 'phone'; PT.Push.setLoggedIn(false); M.err = msg || ''; M.moving = null; closeSheet(); render();
 }
 
@@ -466,7 +467,7 @@ setInterval(() => { if (document.visibilityState === 'visible') bgRefresh(); }, 
 
 (async () => {
   if (PT.escaping) return;  // 카톡 등에서 열렸으면 브라우저로 넘어갈 때까지 대기
-  if (PT.T !== 'romi') API('publicInfo').then(r => { M.tname = r && r.name; if (!M.v) render(); }).catch(() => {});
+  if (PT.T && PT.T !== 'romi') API('publicInfo').then(r => { M.tname = r && r.name; if (!M.v) render(); }).catch(() => {});
   if (M.tok) { const v = await act('memberView'); if (v) return; }
   render();
 })();

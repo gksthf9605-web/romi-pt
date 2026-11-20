@@ -7,18 +7,25 @@
   PT.APP_URL = APP_URL;
   PT.NAME = '어메이징 석계 PT 예약';
 
-  /* ---------- 선생님 구분: 주소 끝 ?t=아이디 (없으면 로미) ---------- */
+  /* ---------- 선생님 구분 ----------
+     모두 같은 주소를 써요. 로그인할 때 서버가 전화번호(회원)·비밀번호(관리자)로 선생님을 찾아 주고,
+     화면은 그걸 기억해요. 로그아웃하면 잊어요.
+     (예전 전용 주소 doyoung.html / ?t=doyoung 도 계속 그 선생님으로 열려요) */
   function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
   var isAdm = /admin[^/]*\.html/i.test(location.pathname || '');
   var qt = (location.search.match(/[?&]t=([^&#]*)/) || [])[1];
-  var TK = isAdm ? 'pt_ta' : 'pt_t';
-  // 선생님 전용 페이지(doyoung.html 등)는 페이지 안에 PT_T가 박혀 있어요
-  // 기억해 둔 값은 쓰지 않아요: 페이지 자체(admin.html=로미, admin-doyoung.html=도영)로만 정해져요
-  var T0 = window.PT_T || (qt ? decodeURIComponent(qt).toLowerCase() : 'romi');
-  PT.HOME_T = T0;              // 이 기기가 원래 속한 선생님
+  var TK = isAdm ? 'pt_tenant_a' : 'pt_tenant_m';   // (예전 pt_ta/pt_t 값은 일부러 안 읽어요)
+  var FIXED = window.PT_T || (qt ? decodeURIComponent(qt).toLowerCase() : null);   // 주소로 정해진 선생님
+  var T0 = FIXED || ls(TK) || null;          // 모르면 null → 서버가 알아서 (로그인 전이면 번호·비번으로, 아니면 로미)
+  PT.HOME_T = T0 || 'romi';    // 로그인한 본인 선생님
   PT.T = T0;                   // 지금 보고 있는 선생님 (총괄은 바꿀 수 있어요)
-  PT.sfx = T0 === 'romi' ? '' : '@' + T0;   // 로그인 저장 이름 구분
-  PT.setT = function (t) { PT.T = t || T0; };
+  PT.sfx = FIXED && FIXED !== 'romi' ? '@' + FIXED : '';   // 로그인 저장 이름 (전용 주소만 따로)
+  PT.FIXED = FIXED;
+  PT.loginT = null;            // 관리자 로그인 화면에서 고른 선생님
+  PT.setT = function (t) { PT.T = t || PT.HOME_T; };
+  PT.remember = function (t) { if (!t) return; PT.T = PT.HOME_T = t; if (!FIXED) ls(TK, t); };
+  PT.forget = function () { if (FIXED) return; try { localStorage.removeItem(TK); } catch (e) {} PT.T = null; PT.HOME_T = 'romi'; };
+  var LOGIN_FNS = ['memberCheck', 'memberSetup', 'memberLogin', 'adminLogin'];
 
 
   /* ---------- 통신 ---------- */
@@ -26,13 +33,15 @@
   PT.API = function (fn) {
     var args = Array.prototype.slice.call(arguments, 1);
     var ctrl = window.AbortController ? new AbortController() : null, timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 30000) : null;
-    return fetch(APP_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn: fn, args: args, t: PT.T }), signal: ctrl ? ctrl.signal : undefined })
+    return fetch(APP_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn: fn, args: args, t: fn === 'adminLogin' ? (FIXED || PT.loginT) : (LOGIN_FNS.indexOf(fn) >= 0 ? FIXED : PT.T) }), signal: ctrl ? ctrl.signal : undefined })
       .catch(function (e) { throw new Error(e && e.name === 'AbortError' ? '응답이 너무 늦어요. 잠시 후 다시 시도해 주세요.' : '인터넷 연결을 확인하고 다시 시도해 주세요.'); })
       .finally(function () { if (timer) clearTimeout(timer); })
       .then(function (r) { return r.text(); })
       .then(function (t) {
         var j; try { j = JSON.parse(t); } catch (e) { throw new Error('서버 응답을 읽지 못했어요. 잠시 후 다시 시도해 주세요.'); }
         if (!j.ok) throw new Error(j.error || '오류가 났어요.');
+        if (j.t && (fn === 'memberSetup' || fn === 'memberLogin' || fn === 'adminLogin')) PT.remember(j.t);
+        else if (j.t && fn === 'memberCheck') PT.T = j.t;
         return j.data;
       });
   };
