@@ -77,6 +77,9 @@ label.f{display:block;font-size:13px;font-weight:700;color:var(--sub);margin:12p
 .sheet{position:fixed;inset:0;z-index:20;display:none}
 .sheet.open{display:block}
 .sheet .bd{position:absolute;inset:0;background:rgba(0,0,0,.4)}
+.hbtns{display:flex;gap:5px;flex:none;align-items:flex-start}
+.hbtns .btn.sm{white-space:nowrap;padding:7px 9px;font-size:13px}
+.gimg{display:block;width:100%;height:auto;border-radius:14px;margin-top:8px;background:#f1eefc;min-height:120px}
 .sheet .pn{position:absolute;left:0;right:0;bottom:0;max-height:85vh;overflow:auto;background:var(--card);border-radius:18px 18px 0 0;padding:20px 18px calc(24px + env(safe-area-inset-bottom));max-width:560px;margin:0 auto}
 .sheet h3{margin:0 0 6px;font-size:18px}
 .opt{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:10px;padding:11px 12px;margin-top:8px}
@@ -221,7 +224,7 @@ function render(){
   const v = M.v, alerts = v.swapsIn.length + v.waits.filter(w=>w.free).length;
   app.innerHTML = `<div class="top"><div><h1>${esc(v.me.name)} 회원님</h1>
       <div class="sub">${esc(v.trainer)}쌤 · 남은 PT ${v.me.remaining}회 · 더 예약할 수 있는 횟수 ${Math.max(0, v.me.left)}회</div></div>
-      <div style="display:flex;gap:6px">${PT.Push.state() ? `<button class="btn sm" data-act="pushopen" title="알림 설정">${PT.Push.state()==='granted'?'🔔':'🔕'}</button>` : ''}<button class="btn sm" data-act="install">📲 앱</button><button class="btn sm" data-act="refresh">↻</button></div></div>
+      <div class="hbtns">${PT.Push.state() ? `<button class="btn sm" data-act="pushopen" title="알림 설정">${PT.Push.state()==='granted'?'🔔':'🔕'}</button>` : ''}<button class="btn sm" data-act="howto" data-n="1" title="사용법">📖 사용법</button><button class="btn sm" data-act="install">📲 앱</button><button class="btn sm" data-act="refresh">↻</button></div></div>
     <div class="seg"><button class="${M.tab==='book'?'on':''}" data-act="tab" data-t="book">예약하기</button>
       <button class="${M.tab==='mine'?'on':''}" data-act="tab" data-t="mine">내 예약${alerts?`<span class="badge">${alerts}</span>`:''}</button></div>
     ${v.maint ? `<div class="banner" style="margin:10px 0">🔧 지금 앱 점검 중이에요. 예약·취소·변경은 잠시 후(약 1시간 안에) 다시 해 주세요.</div>` : ''}
@@ -233,6 +236,9 @@ function render(){
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">${[['good','😊 좋았어요'],['hard','😮‍💨 힘들었어요'],['pain','🤕 아픈 곳이 있었어요']].map(([k,l])=>`<button class="btn sm" data-act="fb" data-id="${v.fbAsk.id}" data-v="${k}">${l}</button>`).join('')}</div>
       <div class="hint" style="margin-top:8px">추가로 피드백 사항이 있으면 카톡으로 남겨 주세요. 다음 수업 때 큰 도움이 돼요!</div></div>` : ''}
     ${M.fbDone === 1 ? `<div class="card" style="text-align:center">감사합니다! 💜 ${esc(v.trainer)}쌤에게 전달했어요.</div>` : ''}
+    ${v.me.remaining > 0 && v.me.remaining <= 5 && reregHidden() !== String(v.me.remaining) ? `<div class="card" style="border-color:var(--acc);background:var(--acc-soft);position:relative"><button class="link" data-act="rereg" data-n="${v.me.remaining}" style="position:absolute;top:10px;right:12px;font-size:18px;text-decoration:none;color:var(--mut,#888)" aria-label="닫기">✕</button>
+      <b>📣 남은 PT가 ${v.me.remaining}회예요</b>
+      <div class="hint" style="margin-top:6px">재등록 상담은 ${esc(v.trainer)}쌤에게 편하게 말씀해 주세요. 미리 이야기하면 수업이 끊기지 않아요!</div></div>` : ''}
     ${M.tab==='book' ? vBook() : vMine()}
     <div class="hint" style="margin-top:20px">※ ${esc(v.policy)}<br>${esc(v.trainer)} 트레이너 · <button class="link" data-act="logout">로그아웃</button></div>`;
 }
@@ -259,8 +265,9 @@ function vLogin(){
       <button class="link" data-act="back">전화번호 다시 입력</button>`;
   if (s === 'unknown') body = `<div class="banner" style="margin-top:12px">등록되지 않은 번호예요. 트레이너에게 등록된 번호가 맞는지 확인해 주세요.</div><button class="btn block" data-act="back">다시 입력</button>`;
   if (s === 'needcode') body = `<div class="banner" style="margin-top:12px">아직 가입 전이에요. 트레이너가 문자로 보낸 <b>가입 링크</b>로 들어와 주세요. 문자가 없으면 트레이너에게 다시 요청해 주세요.</div><button class="btn block" data-act="back">다시 입력</button>`;
-  return `<div class="top"><div><h1>${M.tname ? esc(M.tname)+'쌤 ' : ''}PT 예약</h1><div class="sub">${s==='setup'?'처음 한 번만 가입하면 돼요':'로그인'}</div></div><button class="btn sm" data-act="install">📲 앱처럼 쓰기</button></div>
-    <div class="card" style="margin-top:14px">${body}${M.err?`<div class="banner" style="margin:12px 0 0">${esc(M.err)}</div>`:''}</div>`;
+  return `<div class="top"><div><h1>${M.tname ? esc(M.tname)+'쌤 ' : ''}PT 예약</h1><div class="sub">${s==='setup'?'처음 한 번만 가입하면 돼요':'로그인'}</div></div></div>
+    <div class="card" style="margin-top:14px">${body}${M.err?`<div class="banner" style="margin:12px 0 0">${esc(M.err)}</div>`:''}</div>
+    <div class="row" style="margin-top:12px"><button class="btn" data-act="howto" data-n="1">📖 사용법 보기</button><button class="btn" data-act="install">📲 앱 설치 방법</button></div>`;
 }
 
 function vCal(v){
@@ -339,6 +346,7 @@ function vMine(){
   return h;
 }
 
+function reregHidden(){ try { return localStorage.getItem('pt_rereg' + PT.sfx); } catch (e) { return null; } }
 /* ---------- 동작 ---------- */
 const H = {
   async cond(el){
@@ -349,22 +357,33 @@ const H = {
     const v = await act('memberFeedback', el.dataset.id, el.dataset.v);
     if (v) { M.fbDone = 1; render(); setTimeout(() => { M.fbDone = 2; render(); }, 4000); }
   },
+  rereg(el){ try { localStorage.setItem('pt_rereg' + PT.sfx, el.dataset.n); } catch (e) {} render(); },
   tab(el){ M.tab = el.dataset.t; render(); window.scrollTo(0,0); },
   day(el){ M.day = el.dataset.d; render(); },
   close(){ closeSheet(); },
   pushopen(){ PT.Push.openPanel(); },
-  install(){
-    const ua = navigator.userAgent || '', ios = /iPhone|iPad|iPod/i.test(ua), sam = /SamsungBrowser/i.test(ua);
-    const steps = {
-      ios: ['<b>사파리</b>로 이 페이지를 열어요 (카톡·문자 안에서 열렸다면 오른쪽 아래 ⋯ → \'Safari로 열기\')', '아래쪽 <b>공유 버튼</b>(네모에 ↑)을 눌러요', '<b>\'홈 화면에 추가\'</b>를 누르고 이름을 \'PT 예약\'으로 해서 추가해요'],
-      sam: ['<b>삼성 인터넷</b>에서 이 페이지가 열린 상태에서', '아래쪽 <b>☰ 메뉴</b>를 눌러요', '<b>\'현재 페이지 추가 → 홈 화면\'</b>을 눌러요'],
-      chrome: ['<b>크롬</b>에서 이 페이지를 열어요 (문자 안에서 열렸다면 ⋮ → \'Chrome에서 열기\')', '오른쪽 위 <b>⋮ 메뉴</b>를 눌러요', '<b>\'홈 화면에 추가\'</b>를 눌러요']
-    };
-    const show = ios ? ['ios'] : sam ? ['sam','chrome'] : ['chrome','sam','ios'];
-    const nm = { ios:'아이폰', sam:'갤럭시 (삼성 인터넷)', chrome:'안드로이드 (크롬)' };
-    openSheet(`<h3>📲 홈 화면에 추가하기</h3><div class="sub">한 번 추가해 두면 앱처럼 아이콘을 눌러 바로 들어올 수 있어요. 로그인도 유지돼요.</div>
-      ${show.map(k => `<div class="sec">${nm[k]}</div><div class="card">${steps[k].map((s,i)=>`<div style="margin:4px 0">${i+1}. ${s}</div>`).join('')}</div>`).join('')}
-      <button class="btn pri block" data-act="close">확인</button>`);
+  install(el){
+    const ua = navigator.userAgent || '', ios = /iPhone|iPad|iPod|Macintosh.*Mobile/i.test(ua), sam = /SamsungBrowser/i.test(ua);
+    const dev = (el && el.dataset && el.dataset.dev) || (ios ? 'iphone' : 'galaxy');
+    const tab = (k, l) => `<button class="btn sm ${dev===k?'pri':''}" data-act="install" data-dev="${k}">${l}</button>`;
+    openSheet(`<h3>📲 앱처럼 쓰기 (홈 화면에 설치)</h3><div class="sub">한 번 설치해 두면 아이콘으로 바로 들어오고, 알림도 받을 수 있어요.</div>
+      <div style="display:flex;gap:6px;margin:10px 0 12px">${tab('galaxy','갤럭시 (크롬)')}${tab('iphone','아이폰 (사파리)')}</div>
+      ${dev==='galaxy' && sam ? `<div class="hint" style="margin-bottom:10px">지금 <b>삼성 인터넷</b>으로 열려 있어요. 크롬으로 여시거나, 삼성 인터넷이면 아래 <b>☰ 메뉴 → 현재 페이지 추가 → 홈 화면</b>을 눌러 주세요.</div>` : ''}
+      <img class="gimg" src="guide/${dev}-1.webp" alt="${dev==='iphone'?'아이폰':'갤럭시'} 설치 방법 1">
+      <img class="gimg" src="guide/${dev}-2.webp" alt="${dev==='iphone'?'아이폰':'갤럭시'} 로그인·알림 켜기" loading="lazy">
+      <button class="btn pri block" style="margin-top:12px" data-act="close">닫기</button>`);
+    const pn = $('#pn'); if (pn) pn.scrollTop = 0;
+  },
+  howto(el){
+    const n = Number((el && el.dataset && el.dataset.n) || 1), first = el && el.dataset && el.dataset.first;
+    try { localStorage.setItem('pt_howto_seen', '1'); } catch(e){}
+    const L = ['예약하기','변경·취소','대기·변경 요청','수업 전후 알림','그 밖의 알림'];
+    openSheet(`<h3>📖 ${first ? '가입을 축하해요! 사용법을 확인해 보세요' : '사용법'}</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 12px">${L.map((l,i)=>`<button class="btn sm ${n===i+1?'pri':''}" data-act="howto" data-n="${i+1}">${i+1}. ${l}</button>`).join('')}</div>
+      <img class="gimg" src="guide/howto-${n}.webp" alt="사용법 ${n}. ${L[n-1]}">
+      <div class="row" style="margin-top:12px">${n>1?`<button class="btn" data-act="howto" data-n="${n-1}">‹ 이전</button>`:'<button class="btn" data-act="close">닫기</button>'}
+      ${n<L.length?`<button class="btn pri" data-act="howto" data-n="${n+1}">다음 ›</button>`:'<button class="btn pri" data-act="close">다 봤어요</button>'}</div>`);
+    const pn = $('#pn'); if (pn) pn.scrollTop = 0;
   },
   async refresh(){ const v = await act('memberView'); if (v) toast('새로고침했어요'); },
   logout(){ logout(''); },
@@ -393,7 +412,9 @@ const H = {
     const av = readGrid(); M.av = av;
     if (nmEl && !name) { M.err = '이름을 넣어 주세요.'; return render(); }
     if (!av.slots.length) { M.err = '수업 가능한 시간을 하나 이상 골라 주세요.'; return render(); }
-    try { M.tok = await API('memberSetup', M.phone, INVITE, pin, true, name, av); afterLogin(); toast('가입했어요! 이제 바로 예약할 수 있어요'); }
+    try { M.tok = await API('memberSetup', M.phone, INVITE, pin, true, name, av); afterLogin(); toast('가입했어요! 이제 바로 예약할 수 있어요');
+      let seen = null; try { seen = localStorage.getItem('pt_howto_seen'); } catch(e){}
+      if (!seen) setTimeout(() => { if (!$('#sheet').classList.contains('open')) H.howto({ dataset: { n: '1', first: '1' } }); }, 900); }
     catch(e){ M.err = errMsg(e); render(); }
   },
   pick(el){
@@ -430,7 +451,7 @@ const H = {
   async docancel(el){ closeSheet(); const v = await act('memberCancel', el.dataset.id); if (v) toast('취소했어요'); },
   async wait(el){
     openSheet(`<h3>대기할까요?</h3><div class="sub"><b>${when(M.day, el.dataset.t)}</b></div>
-      <div class="hint">자리가 나면 '내 예약'에 '자리가 났어요'로 떠요. 알림이 따로 가지 않으니 가끔 확인해 주세요. 트레이너가 대기 순서대로 연락드릴 수도 있어요.</div>
+      <div class="hint">자리가 나면 <b>알림</b>으로 알려 드리고, '내 예약'에도 '자리가 났어요'로 떠요. 대기하신 분들께 같이 알림이 가니 <b>먼저 예약하는 분</b>이 가져가요.</div>
       <div class="row"><button class="btn" data-act="close">아니요</button><button class="btn pri" data-act="dowait" data-t="${el.dataset.t}">대기 신청</button></div>`);
   },
   async dowait(el){ closeSheet(); const v = await act('memberWait', M.day, el.dataset.t); if (v) toast('대기에 올렸어요'); },
