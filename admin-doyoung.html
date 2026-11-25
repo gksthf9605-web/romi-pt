@@ -1303,7 +1303,11 @@ document.addEventListener('keydown', e => {
 });
 function inviteText(m){
   const link = R.url || '(링크 준비 중)';
-  return String(S.settings.inviteTpl || DEFAULTS.inviteTpl)
+  let tpl = String(S.settings.inviteTpl || DEFAULTS.inviteTpl);
+  if (tpl.indexOf('{링크}') < 0) {   // 문구에서 {링크}가 지워져도 링크는 꼭 들어가게
+    tpl = /\n{3,}/.test(tpl) ? tpl.replace(/\n{3,}/, '\n\n{링크}\n\n') : tpl + '\n\n{링크}';
+  }
+  return tpl
     .split('{이름}').join(m.name || '').split('{트레이너}').join(S.settings.trainerName || '')
     .split('{링크}').join(link).split('{규정}').join(S.settings.policy || '');
 }
